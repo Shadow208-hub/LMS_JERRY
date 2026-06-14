@@ -58,7 +58,7 @@ switch ($action) {
         if ($user && password_verify($data['password'], $user['passwordHash'])) {
         
             // RÈGLE DE SÉCURITÉ : Si le compte n'est pas actif (isActive == 0)
-            if ($user['isActive'] === 0) {
+            if ((int)$user['isActive'] === 0) {
                 echo json_encode(["status" => "error", "message" => "Votre compte n'a pas encore été validé par l'administrateur."]);
                 break;
              }
