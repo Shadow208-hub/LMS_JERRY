@@ -13,7 +13,7 @@ export class User {
     }   
      //Méthodes / Scopes :prototype.validPassword(password) : Compare le mot de passe fourni avec le hash Bcrypt.
     async validPassword(mot){
-        return await bcrypt.compare(this.passwordhashe,mot);
+        return await bcrypt.compare(mot,this.passwordhashe);
     }
 }
 
