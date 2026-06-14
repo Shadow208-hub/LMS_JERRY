@@ -59,7 +59,16 @@ export async function connection(email,password) {
         console.error("Erreur de connexion", error);
     }
 }
-
+export function PasserEvaluation(lessonId){
+    const studentId = JSON.parse(localStorage.getItem('User') || '{}').id;
+    const scoreObtenu = parseInt(prompt("Entrer la note obtenue:"),10);
+    const scoreMax = parseInt(prompt("Entrer la note maximale :", "20"),10);
+    if (isNaN(scoreObtenu) || isNaN(scoreMax)){
+        alert("Valeurs invalides.");
+        return;
+    }
+    soumettre(studentId, lessonId, scoreObtenu,scoreMax);
+}
 export async function CreeCours(données_form){
     const valider = creercours.safeParse(données_form);
     if (!valider.success) {
@@ -85,7 +94,7 @@ export async function CreeCours(données_form){
 
 export async function soumettre() {
     try {
-        const reponse = await fetch('api.php?action=submit_evaluation', {
+        const reponse = await fetch('serveur.php?action=submit_evaluation', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ student_id: studentId, lesson_id: lessonId, score_obtained: scoreObtenu, max_score: scoreMax })
