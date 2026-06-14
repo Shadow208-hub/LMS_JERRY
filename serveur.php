@@ -6,10 +6,10 @@ header("Access-Control-Allow-Methods: POST, GET");
 
 session_start();
 
-$host = 'localhost';
-$db_name = 'lms_jerrydb';
-$username = 'root';
-$password = ''; 
+$host = getenv('DB_HOST') ?: 'localhost';
+$db_name = getenv('DB_NAME') ?: 'lms_jerrydb';
+$username = getenv('DB_USER') ?: 'root';
+$password = getenv('DB_PASSWORD') ?: ''; 
 
 try {
     $bdd = new PDO("mysql:host=$host;dbname=$db_name;charset=utf8", $username, $password, [
