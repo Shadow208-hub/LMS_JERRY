@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS - Espace Personnel</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/zod@3.22.4/lib/index.umd.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Mon Espace d'Apprentissage</h1>
+        <div id="userInfo"></div>
+        <button id="logoutBtn">Déconnexion</button>
+    </header>
+
+    <main class="dashboard-content">
+        <section id="teacherSection" class="card hidden">
+            <h2>Espace Enseignant - Créer un cours</h2>
+            <form id="courseForm">
+                <div class="form-group">
+                    <label for="titre">Titre du cours :</label>
+                    <input type="text" id="titre" required>
+                </div>
+                <div class="form-group">
+                    <label for="code">Code du cours (ex: INF201) :</label>
+                    <input type="text" id="code" required>
+                </div>
+                <div class="form-group">
+                    <label for="description">Description :</label>
+                    <textarea id="description" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="maxetudiant">Nombre max d'étudiants :</label>
+                    <input type="number" id="maxetudiant" required>
+                </div>
+                <button type="submit" class="btn-submit">Ajouter le cours</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Leçons disponibles (Cours Exemple)</h2>
+            <div id="lessonsContainer">
+                <p>Chargement des leçons...</p>
+            </div>
+        </section>
+    </main>
+
+    <script type="module">
+        import { CreeCours, chargerLeconsDuCours } from './app.js';
+
+        // 1. Récupération de l'utilisateur connecté
+        const userJson = localStorage.getItem('User');
+        if (!userJson) {
+            window.location.href = 'index.html';
+        }
+        const user = JSON.parse(userJson);
+
+        // Affichage des informations de bienvenue
+        document.getElementById('userInfo').innerHTML = `<span>Connecté en tant que : <strong>${user.firstName} ${user.lastName}</strong> (${user.role})</span>`;
+
+        // 2. Gestion des accès selon le rôle
+        if (user.role === 'teacher' || user.role === 'admin') {
+            document.getElementById('teacherSection').classList.remove('hidden');
+        }
+
+        // 3. Soumission du formulaire de création de cours (Enseignant)
+        document.getElementById('courseForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const donneesCours = {
+                titre: document.getElementById('titre').value,
+                code: document.getElementById('code').value,
+                description: document.getElementById('description').value,
+                teacherid: parseInt(user.id), // Cast nécessaire pour Zod
+                maxetudiant: parseInt(document.getElementById('maxetudiant').value)
+            };
+            await CreeCours(donneesCours);
+        });
+
+        // 4. Chargement dynamique des leçons (On prend l'ID de cours 1 pour l'exemple)
+        const conteneurHtml = document.getElementById('lessonsContainer');
+        chargerLeconsDuCours(1, conteneurHtml);
+
+        // 5. Gestion de la déconnexion
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('User');
+            window.location.href = 'index.html';
+        });
+    </script>
+</body>
+</html>

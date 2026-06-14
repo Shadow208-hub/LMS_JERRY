@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS - Inscription</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/zod@3.22.4/lib/index.umd.js"></script>
+</head>
+<body>
+    <div class="auth-container">
+        <h2>Créer un compte</h2>
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="nom">Nom :</label>
+                <input type="text" id="nom" required>
+            </div>
+            <div class="form-group">
+                <label for="prenom">Prénom :</label>
+                <input type="text" id="prenom" required>
+            </div>
+            <div class="form-group">
+                <label for="reg_email">Email :</label>
+                <input type="email" id="reg_email" required>
+            </div>
+            <div class="form-group">
+                <label for="reg_password">Mot de passe :</label>
+                <input type="password" id="reg_password" required placeholder="8 caractères min.">
+            </div>
+            <div class="form-group">
+                <label for="role">Vous êtes :</label>
+                <select id="role" required>
+                    <option value="student">Étudiant</option>
+                    <option value="teacher">Enseignant / Professeur</option>
+                </select>
+            </div>
+            <button type="submit" class="btn-submit">S'inscrire</button>
+        </form>
+        <p>Déjà inscrit ? <a href="index.html">Se connecter</a></p>
+    </div>
+
+    <script type="module">
+        import { ajouterUser } from './app.js';
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Formatage des données exactement comme attendu par ton Zod d'app.js
+            const donneesForm = {
+                nom: document.getElementById('nom').value,
+                prenom: document.getElementById('prenom').value,
+                email: document.getElementById('reg_email').value,
+                password: document.getElementById('reg_password').value,
+                role: document.getElementById('role').value
+            };
+
+            await ajouterUser(donneesForm);
+        });
+    </script>
+</body>
+</html>

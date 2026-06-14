@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS - Connexion</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/zod@3.22.4/lib/index.umd.js"></script>
+</head>
+<body>
+    <div class="auth-container">
+        <h2>Connexion au LMS</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Adresse Email :</label>
+                <input type="email" id="email" required placeholder="exemple@univ.cm">
+            </div>
+            <div class="form-group">
+                <label for="password">Mot de passe :</label>
+                <input type="password" id="password" required>
+            </div>
+            <button type="submit" class="btn-submit">Se connecter</button>
+        </form>
+        <p>Pas encore de compte ? <a href="inscription.html">Créer un compte ici</a></p>
+    </div>
+
+    <script type="module">
+        import { connection } from './app.js';
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Appel de ta fonction dans app.js
+            await connection(email, password);
+        });
+    </script>
+</body>
+</html>
