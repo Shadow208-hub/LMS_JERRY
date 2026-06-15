@@ -52,39 +52,40 @@
         const userJson = localStorage.getItem('User');
         if (!userJson) {
             window.location.href = 'index.html';
+        } else {
+            const user = JSON.parse(userJson);
+
+            // Affichage des informations de bienvenue
+            document.getElementById('userInfo').innerHTML = `<span>Connecté en tant que : <strong>${user.firstName} ${user.lastName}</strong> (${user.role})</span>`;
+
+            // 2. Gestion des accès selon le rôle
+            if (user.role === 'teacher' || user.role === 'admin') {
+                document.getElementById('teacherSection').classList.remove('hidden');
+            }
+
+            // 3. Soumission du formulaire de création de cours (Enseignant)
+            document.getElementById('courseForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const donneesCours = {
+                    titre: document.getElementById('titre').value,
+                    code: document.getElementById('code').value,
+                    description: document.getElementById('description').value,
+                    teacherid: parseInt(user.id), // Cast nécessaire pour Zod
+                    maxetudiant: parseInt(document.getElementById('maxetudiant').value)
+                };
+                await CreeCours(donneesCours);
+            });
+
+            // 4. Chargement dynamique des leçons (On prend l'ID de cours 1 pour l'exemple)
+            const conteneurHtml = document.getElementById('lessonsContainer');
+            chargerLeconsDuCours(1, conteneurHtml);
+
+            // 5. Gestion de la déconnexion
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                localStorage.removeItem('User');
+                window.location.href = 'index.html';
+            });
         }
-        const user = JSON.parse(userJson);
-
-        // Affichage des informations de bienvenue
-        document.getElementById('userInfo').innerHTML = `<span>Connecté en tant que : <strong>${user.firstName} ${user.lastName}</strong> (${user.role})</span>`;
-
-        // 2. Gestion des accès selon le rôle
-        if (user.role === 'teacher' || user.role === 'admin') {
-            document.getElementById('teacherSection').classList.remove('hidden');
-        }
-
-        // 3. Soumission du formulaire de création de cours (Enseignant)
-        document.getElementById('courseForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const donneesCours = {
-                titre: document.getElementById('titre').value,
-                code: document.getElementById('code').value,
-                description: document.getElementById('description').value,
-                teacherid: parseInt(user.id), // Cast nécessaire pour Zod
-                maxetudiant: parseInt(document.getElementById('maxetudiant').value)
-            };
-            await CreeCours(donneesCours);
-        });
-
-        // 4. Chargement dynamique des leçons (On prend l'ID de cours 1 pour l'exemple)
-        const conteneurHtml = document.getElementById('lessonsContainer');
-        chargerLeconsDuCours(1, conteneurHtml);
-
-        // 5. Gestion de la déconnexion
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.removeItem('User');
-            window.location.href = 'index.html';
-        });
     </script>
 </body>
 </html>
