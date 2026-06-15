@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><title>Test API</title></head>
+<body>
+    <h2>Test serveur.php</h2>
+    <button id="btnRegister">Tester l'inscription</button>
+    <button id="btnLogin">Tester la connexion</button>
+    <pre id="output" style="background:#eee; padding:10px; white-space:pre-wrap;"></pre>
+
+    <script>
+        const output = document.getElementById('output');
+
+        document.getElementById('btnRegister').addEventListener('click', async () => {
+            output.textContent = 'Chargement...';
+            try {
+                const response = await fetch('serveur.php?action=register', {
+                    method: 'POST',
+                    headers: {'Content-type': 'application/json'},
+                    body: JSON.stringify({
+                        nom: "Test" + Date.now(),
+                        prenom: "Debug",
+                        email: "debugtest" + Date.now() + "@example.com",
+                        password: "password123",
+                        role: "student"
+                    })
+                });
+                const text = await response.text();
+                output.textContent = 'Statut HTTP: ' + response.status + '\n\n' + text;
+            } catch (err) {
+                output.textContent = 'Erreur fetch: ' + err.message;
+            }
+        });
+
+        document.getElementById('btnLogin').addEventListener('click', async () => {
+            output.textContent = 'Chargement...';
+            try {
+                const response = await fetch('serveur.php?action=login', {
+                    method: 'POST',
+                    headers: {'Content-type': 'application/json'},
+                    body: JSON.stringify({
+                        email: "test@example.com",
+                        password: "wrongpassword"
+                    })
+                });
+                const text = await response.text();
+                output.textContent = 'Statut HTTP: ' + response.status + '\n\n' + text;
+            } catch (err) {
+                output.textContent = 'Erreur fetch: ' + err.message;
+            }
+        });
+    </script>
+</body>
+</html>
