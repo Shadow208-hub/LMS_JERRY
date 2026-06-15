@@ -59,6 +59,7 @@ try {
 $action = $_GET['action'] ?? '';
 $data = json_decode(file_get_contents('php://input'), true);
  
+try {
 switch ($action) {
     case 'register':
         // 1. Vérification si l'email existe déjà
@@ -147,5 +148,18 @@ switch ($action) {
     default:
         echo json_encode(["status" => "error", "message" => "Action non reconnue."]);
         break;
+}
+} catch (PDOException $e) {
+    echo json_encode([
+        "status" => "error",
+        "message" => "Erreur base de données.",
+        "debug" => $e->getMessage()
+    ]);
+} catch (Throwable $e) {
+    echo json_encode([
+        "status" => "error",
+        "message" => "Erreur serveur.",
+        "debug" => $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine()
+    ]);
 }
 ?>
