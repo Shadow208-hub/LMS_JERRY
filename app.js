@@ -11,7 +11,7 @@ const model =z.object({
 
 const creercours = z.object({
     titre: z.string().min(3, {message: "le titre doit contenir au moins 3 caracteres"}),
-    code: z.string().toUpperCase().min(6, {message: "le code du cours(ex:INF201)"}),
+    code: z.string().min(6, {message: "le code du cours(ex:INF201)"}).transform(val => val.toUpperCase()),
     teacherid: z.number().int({message: "identifiant du professeur"}),
     description: z.string().min(3, {message: "la description doit comtenir au moins 3 caracteres"}),
     maxetudiant: z.number().int().positive({message: "le nombre d'etudiant est strictement positif"})
@@ -59,16 +59,7 @@ export async function connection(email,password) {
         console.error("Erreur de connexion", error);
     }
 }
-export function PasserEvaluation(lessonId){
-    const studentId = JSON.parse(localStorage.getItem('User') || '{}').id;
-    const scoreObtenu = parseInt(prompt("Entrer la note obtenue:"),10);
-    const scoreMax = parseInt(prompt("Entrer la note maximale :", "20"),10);
-    if (isNaN(scoreObtenu) || isNaN(scoreMax)){
-        alert("Valeurs invalides.");
-        return;
-    }
-    soumettre(studentId, lessonId, scoreObtenu,scoreMax);
-}
+
 export async function CreeCours(données_form){
     const valider = creercours.safeParse(données_form);
     if (!valider.success) {
@@ -92,7 +83,7 @@ export async function CreeCours(données_form){
     }
 }
 
-export async function soumettre() {
+export async function soumettre(studentId, lessonId, scoreObtenu, scoreMax) {
     try {
         const reponse = await fetch('serveur.php?action=submit_evaluation', {
             method: 'POST',
@@ -108,6 +99,17 @@ export async function soumettre() {
     } catch (error) {
         console.error("Erreur lors de la soumission de l'évaluation:", error);
     }
+}
+
+export function passerEvaluation(lessonId){
+    const studentId = JSON.parse(localStorage.getItem('User') || '{}').id;
+    const scoreObtenu = parseInt(prompt("Entrer la note obtenue:"),10);
+    const scoreMax = parseInt(prompt("Entrer la note maximale :", "20"),10);
+    if (isNaN(scoreObtenu) || isNaN(scoreMax)){
+        alert("Valeurs invalides.");
+        return;
+    }
+    soumettre(studentId, lessonId, scoreObtenu, scoreMax);
 }
 
 export async function chargerLeconsDuCours(courseId, conteneurHtml) {
@@ -126,15 +128,16 @@ export async function chargerLeconsDuCours(courseId, conteneurHtml) {
                 elementHtml.innerHTML = `
                     <h3>${lecon.title} (Document PDF)</h3>
                     <a href="${lecon.file_path}" download class="btn-download">📥 Télécharger le cours PDF</a>
-                    <button onclick="passerEvaluation(${lecon.id})">Passer l'évaluation</button>
+                    <button class="btn-evaluation">Passer l'évaluation</button>
                 `;
             } else {
                 elementHtml.innerHTML = `
                     <h3>${lecon.title} (Vidéo)</h3>
                     <video src="${lecon.file_path}" controls width="320"></video>
-                    <br><button onclick="passerEvaluation(${lecon.id})">Passer l'évaluation</button>
+                    <br><button class="btn-evaluation">Passer l'évaluation</button>
                 `;
             }
+            elementHtml.querySelector('.btn-evaluation').addEventListener('click', () => passerEvaluation(lecon.id));
             conteneurHtml.appendChild(elementHtml);
         });
     } catch (error) {
