@@ -58,7 +58,7 @@ try {
  
 $action = $_GET['action'] ?? '';
 $data = json_decode(file_get_contents('php://input'), true);
-
+ 
 // Vérifie que l'utilisateur connecté est admin, sinon renvoie une erreur et arrête
 function requireAdmin() {
     if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
@@ -66,7 +66,7 @@ function requireAdmin() {
         exit;
     }
 }
-
+ 
 try {
 switch ($action) {
     // Vérifie si l'utilisateur connecté est admin (pour protéger admin.html côté client)
@@ -76,7 +76,7 @@ switch ($action) {
             "isAdmin" => isset($_SESSION['role']) && $_SESSION['role'] === 'admin'
         ]);
         break;
-
+ 
     case 'register':
         // 1. Vérification si l'email existe déjà
         $check = $bdd->prepare('SELECT id FROM users WHERE email = ?');
@@ -144,7 +144,7 @@ switch ($action) {
             : "Le compte de l'enseignant a été désactivé.";
         echo json_encode(["status" => "success", "message" => $msg]);
         break;
-
+ 
     // Liste des enseignants en attente d'activation
     case 'get_pending_teachers':
         requireAdmin();
@@ -152,7 +152,7 @@ switch ($action) {
         $req->execute();
         echo json_encode(["status" => "success", "teachers" => $req->fetchAll()]);
         break;
-
+ 
     // Liste de tous les enseignants (actifs et inactifs)
     case 'get_teachers':
         requireAdmin();
@@ -160,7 +160,7 @@ switch ($action) {
         $req->execute();
         echo json_encode(["status" => "success", "teachers" => $req->fetchAll()]);
         break;
-
+ 
     // Promouvoir un utilisateur existant au rôle admin (par email)
     case 'promote_admin':
         requireAdmin();
@@ -176,7 +176,7 @@ switch ($action) {
             echo json_encode(["status" => "success", "message" => "Utilisateur promu administrateur."]);
         }
         break;
-
+ 
     // Liste des administrateurs
     case 'get_admins':
         requireAdmin();
@@ -184,18 +184,29 @@ switch ($action) {
         $req->execute();
         echo json_encode(["status" => "success", "admins" => $req->fetchAll()]);
         break;
-
-    // Liste des cours existants
+ 
+    // Liste des cours existants (admin : tous, prof : les siens)
     case 'get_courses':
-        requireAdmin();
-        $req = $bdd->prepare("SELECT id, title, code, teacherId FROM courses ORDER BY id DESC");
-        $req->execute();
+        if (!isset($_SESSION['user_id'])) {
+            echo json_encode(["status" => "error", "message" => "Non connecté."]);
+            break;
+        }
+        if ($_SESSION['role'] === 'admin') {
+            $req = $bdd->prepare("SELECT id, title, code, teacherId FROM courses ORDER BY id DESC");
+            $req->execute();
+        } else {
+            $req = $bdd->prepare("SELECT id, title, code, teacherId FROM courses WHERE teacherId = ? ORDER BY id DESC");
+            $req->execute([$_SESSION['user_id']]);
+        }
         echo json_encode(["status" => "success", "courses" => $req->fetchAll()]);
         break;
-
-    // Ajouter une leçon (PDF ou vidéo) à un cours
+ 
+    // Ajouter une leçon — accessible au prof propriétaire du cours ET à l'admin
     case 'add_lesson':
-        requireAdmin();
+        if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['teacher', 'admin'])) {
+            echo json_encode(["status" => "error", "message" => "Accès refusé."]);
+            break;
+        }
         if (empty($data['course_id']) || empty($data['title']) || empty($data['content_type']) || empty($data['file_path'])) {
             echo json_encode(["status" => "error", "message" => "Champs manquants."]);
             break;
@@ -204,15 +215,45 @@ switch ($action) {
             echo json_encode(["status" => "error", "message" => "content_type doit être 'pdf' ou 'video'."]);
             break;
         }
+        if ($_SESSION['role'] === 'teacher') {
+            $checkOwner = $bdd->prepare('SELECT id FROM courses WHERE id = ? AND teacherId = ?');
+            $checkOwner->execute([$data['course_id'], $_SESSION['user_id']]);
+            if (!$checkOwner->fetch()) {
+                echo json_encode(["status" => "error", "message" => "Ce cours ne vous appartient pas."]);
+                break;
+            }
+        }
         $req = $bdd->prepare('INSERT INTO lessons (course_id, title, content_type, file_path) VALUES (?, ?, ?, ?)');
         $req->execute([$data['course_id'], $data['title'], $data['content_type'], $data['file_path']]);
         echo json_encode(["status" => "success", "message" => "Leçon ajoutée avec succès."]);
         break;
  
     case 'create_course':
-        $req = $bdd->prepare('INSERT INTO courses (title, code, description, teacherId, maxStudents, module_id) VALUES (?, ?, ?, ?, ?, ?)');
-        $req->execute([$data['titre'], $data['code'], $data['description'] ?? '', $data['teacherid'], $data['maxetudiant'], $data['module_id'] ?? null]);
-        echo json_encode(["status" => "success", "message" => "Le cours a été ajouté et lié avec succès."]);
+        // Accessible au professeur ET à l'admin
+        if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['teacher', 'admin'])) {
+            echo json_encode(["status" => "error", "message" => "Accès refusé."]);
+            break;
+        }
+        if (empty($data['titre']) || empty($data['code']) || empty($data['teacherid']) || empty($data['maxetudiant'])) {
+            echo json_encode(["status" => "error", "message" => "Champs obligatoires manquants."]);
+            break;
+        }
+        // Vérifier unicité du code cours
+        $checkCode = $bdd->prepare('SELECT id FROM courses WHERE code = ?');
+        $checkCode->execute([strtoupper($data['code'])]);
+        if ($checkCode->fetch()) {
+            echo json_encode(["status" => "error", "message" => "Ce code de cours existe déjà."]);
+            break;
+        }
+        $req = $bdd->prepare('INSERT INTO courses (title, code, description, teacherId, maxStudents) VALUES (?, ?, ?, ?, ?)');
+        $req->execute([
+            $data['titre'],
+            strtoupper($data['code']),
+            $data['description'] ?? '',
+            $data['teacherid'],
+            $data['maxetudiant']
+        ]);
+        echo json_encode(["status" => "success", "message" => "Cours créé avec succès !", "course_id" => $bdd->lastInsertId()]);
         break;
  
     case 'submit_evaluation':
@@ -226,11 +267,25 @@ switch ($action) {
         echo json_encode(["status" => "success", "progress_percent" => $progressPercent]);
         break;
  
-    // Récupérer les leçons d'un cours (avec le lien de téléchargement PDF)
+    // Récupérer les leçons d'un cours
     case 'get_lessons':
         $req = $bdd->prepare('SELECT * FROM lessons WHERE course_id = ?');
         $req->execute([$_GET['course_id']]);
-        echo json_encode($req->fetchAll());
+        echo json_encode(["status" => "success", "lessons" => $req->fetchAll()]);
+        break;
+ 
+    // Cours d'un enseignant (accessible prof + admin)
+    case 'get_teacher_courses':
+        if (!isset($_SESSION['user_id'])) {
+            echo json_encode(["status" => "error", "message" => "Non connecté."]);
+            break;
+        }
+        $tid = ($_SESSION['role'] === 'admin' && isset($_GET['teacher_id']))
+            ? intval($_GET['teacher_id'])
+            : $_SESSION['user_id'];
+        $req = $bdd->prepare("SELECT id, title, code, description, maxStudents FROM courses WHERE teacherId = ? ORDER BY id DESC");
+        $req->execute([$tid]);
+        echo json_encode(["status" => "success", "courses" => $req->fetchAll()]);
         break;
  
     default:
@@ -251,3 +306,4 @@ switch ($action) {
     ]);
 }
 ?>
+
