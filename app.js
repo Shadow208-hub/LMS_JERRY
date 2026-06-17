@@ -1,6 +1,6 @@
 import {User, Cours, Inscription} from './models.js';
 import { z } from 'https://cdn.jsdelivr.net/npm/zod@3.23.8/+esm';
-
+ 
 const model =z.object({
     nom: z.string().min(2, {message:"Le nom doit contenir au moins 2 caracteres"}),
     prenom: z.string().min(2,{message:"Le nom doit contenir au moins 2 caracteres"}),
@@ -8,7 +8,7 @@ const model =z.object({
     password: z.string().min(8,{message: "Pour un mot de passe sur il faut au moins 8 caracteres"}),
     role: z.enum(['student','teacher','admin'],{message: "doit etre defini au prealable"})
 });
-
+ 
 const creercours = z.object({
     titre: z.string().min(3, {message: "le titre doit contenir au moins 3 caracteres"}),
     code: z.string().min(6, {message: "le code du cours(ex:INF201)"}).transform(val => val.toUpperCase()),
@@ -16,7 +16,7 @@ const creercours = z.object({
     description: z.string().min(3, {message: "la description doit comtenir au moins 3 caracteres"}),
     maxetudiant: z.number().int().positive({message: "le nombre d'etudiant est strictement positif"})
 });
-
+ 
 export async function ajouterUser(données_form) {
     const confirmer = model.safeParse(données_form);
     if (!confirmer.success) {
@@ -39,7 +39,7 @@ export async function ajouterUser(données_form) {
         console.error("Erreur d'inscription:", error);
     }
 }
-
+ 
 export async function connection(email,password) {
     try {
         const response = await fetch('serveur.php?action=login',{
@@ -59,7 +59,7 @@ export async function connection(email,password) {
         console.error("Erreur de connexion", error);
     }
 }
-
+ 
 export async function CreeCours(données_form){
     const valider = creercours.safeParse(données_form);
     if (!valider.success) {
@@ -82,7 +82,7 @@ export async function CreeCours(données_form){
         console.error("Erreur lors de la creation du cours:", error);
     }
 }
-
+ 
 export async function soumettre(studentId, lessonId, scoreObtenu, scoreMax) {
     try {
         const reponse = await fetch('serveur.php?action=submit_evaluation', {
@@ -100,7 +100,7 @@ export async function soumettre(studentId, lessonId, scoreObtenu, scoreMax) {
         console.error("Erreur lors de la soumission de l'évaluation:", error);
     }
 }
-
+ 
 export function passerEvaluation(lessonId){
     const studentId = JSON.parse(localStorage.getItem('User') || '{}').id;
     const scoreObtenu = parseInt(prompt("Entrer la note obtenue:"),10);
@@ -111,28 +111,29 @@ export function passerEvaluation(lessonId){
     }
     soumettre(studentId, lessonId, scoreObtenu, scoreMax);
 }
-
+ 
 export async function chargerLeconsDuCours(courseId, conteneurHtml) {
     try {
         const response = await fetch(`serveur.php?action=get_lessons&course_id=${courseId}`);
-        const lecons = await response.json();
-        
+        const data = await response.json();
+ 
         conteneurHtml.innerHTML = '';
-        if(lecons.error) return;
-        lecons.forEach(lecon => {
-            let elementHtml = document.createElement('div');
+        if (data.status !== 'success' || data.lessons.length === 0) {
+            conteneurHtml.innerHTML = '<p class="empty-state">Aucune leçon disponible pour ce cours.</p>';
+            return;
+        }
+        data.lessons.forEach(lecon => {
+            const elementHtml = document.createElement('div');
             elementHtml.className = "lecon-item";
-            
-            // Si le contenu est un PDF, on ajoute un bouton de téléchargement direct
-            if(lecon.content_type === 'pdf') {
+            if (lecon.content_type === 'pdf') {
                 elementHtml.innerHTML = `
-                    <h3>${lecon.title} (Document PDF)</h3>
-                    <a href="${lecon.file_path}" download class="btn-download">📥 Télécharger le cours PDF</a>
+                    <h3>${lecon.title} <span class="badge badge-pdf">PDF</span></h3>
+                    <a href="${lecon.file_path}" download class="btn-download">📥 Télécharger le cours</a>
                     <button class="btn-evaluation">Passer l'évaluation</button>
                 `;
             } else {
                 elementHtml.innerHTML = `
-                    <h3>${lecon.title} (Vidéo)</h3>
+                    <h3>${lecon.title} <span class="badge badge-video">Vidéo</span></h3>
                     <video src="${lecon.file_path}" controls width="320"></video>
                     <br><button class="btn-evaluation">Passer l'évaluation</button>
                 `;
@@ -142,5 +143,36 @@ export async function chargerLeconsDuCours(courseId, conteneurHtml) {
         });
     } catch (error) {
         console.error("Erreur de chargement des leçons:", error);
+        conteneurHtml.innerHTML = '<p>Erreur de chargement des leçons.</p>';
+    }
+}
+ 
+// Charge les cours du professeur connecté et les affiche dans le conteneur donné
+export async function chargerMesCours(conteneurHtml, onSelectCours) {
+    try {
+        const response = await fetch('serveur.php?action=get_teacher_courses');
+        const data = await response.json();
+        conteneurHtml.innerHTML = '';
+        if (data.status !== 'success' || data.courses.length === 0) {
+            conteneurHtml.innerHTML = '<p class="empty-state">Vous n\'avez pas encore créé de cours.</p>';
+            return;
+        }
+        data.courses.forEach(cours => {
+            const div = document.createElement('div');
+            div.className = 'course-card';
+            div.innerHTML = `
+                <div class="course-info">
+                    <h3>${cours.title}</h3>
+                    <span class="course-code">${cours.code}</span>
+                    <p>${cours.description || ''}</p>
+                    <small>Max : ${cours.maxStudents} étudiant(s)</small>
+                </div>
+                <button class="btn-submit btn-small">Gérer les leçons →</button>
+            `;
+            div.querySelector('button').addEventListener('click', () => onSelectCours(cours));
+            conteneurHtml.appendChild(div);
+        });
+    } catch (error) {
+        console.error("Erreur chargement des cours:", error);
     }
 }
