@@ -1,328 +1,544 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
-
+/* ================================================================
+   LMS — Feuille de styles
+   Polices : Sora (titres) + Inter (corps)
+   ================================================================ */
+ 
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+ 
+/* ----------------------------------------------------------------
+   Tokens
+   ---------------------------------------------------------------- */
 :root {
-    --bg: #0E1525;
-    --surface: #161F35;
-    --surface-raised: #1E2A47;
-    --border: #2A3858;
-    --border-soft: rgba(217, 166, 72, 0.16);
-    --accent: #D9A648;
-    --accent-soft: rgba(217, 166, 72, 0.12);
-    --text: #E7ECF5;
-    --text-muted: #8C99B8;
-    --success: #4ADE80;
-    --success-soft: rgba(74, 222, 128, 0.12);
-    --error: #F2685C;
-    --error-soft: rgba(242, 104, 92, 0.12);
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 16px;
-    --shadow-card: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -16px rgba(0,0,0,0.6);
-    --font-display: 'Fraunces', Georgia, serif;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --bleu-nuit:   #0A1628;
+  --bleu-accent: #2563EB;
+  --bleu-clair:  #EFF6FF;
+  --bleu-hover:  #1D4ED8;
+  --vert:        #10B981;
+  --ambre:       #F59E0B;
+  --violet:      #7C3AED;
+  --rouge:       #EF4444;
+  --gris-fond:   #F7F9FC;
+  --gris-bord:   #E2E8F0;
+  --gris-texte:  #64748B;
+  --blanc:       #FFFFFF;
+  --texte:       #1E293B;
+ 
+  --radius:      10px;
+  --radius-lg:   16px;
+  --ombre:       0 2px 12px rgba(10,22,40,.08);
+  --ombre-hover: 0 6px 24px rgba(37,99,235,.15);
+  --transition:  .22s ease;
 }
-
-*, *::before, *::after {
-    box-sizing: border-box;
-}
-
+ 
+/* ----------------------------------------------------------------
+   Reset léger
+   ---------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ 
 body {
-    font-family: var(--font-body);
-    font-size: 15px;
-    line-height: 1.6;
-    background-color: var(--bg);
-    background-image:
-        radial-gradient(ellipse 900px 600px at 12% -10%, rgba(217,166,72,0.07) 0%, transparent 60%),
-        radial-gradient(ellipse 700px 500px at 100% 10%, rgba(74,110,222,0.05) 0%, transparent 55%);
-    background-attachment: fixed;
-    margin: 0;
-    padding: 0;
-    color: var(--text);
-    -webkit-font-smoothing: antialiased;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  color: var(--texte);
+  background: var(--gris-fond);
+  line-height: 1.6;
+  min-height: 100vh;
 }
-
-/* ── Typography ── */
-h1, h2, h3 {
-    font-family: var(--font-display);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--text);
-    margin: 0;
+ 
+h1, h2, h3, h4 {
+  font-family: 'Sora', sans-serif;
+  line-height: 1.25;
 }
-
-h2 {
-    font-size: 1.5rem;
-    margin-bottom: 20px;
-}
-
-a {
-    color: var(--accent);
-    text-decoration: none;
-}
-
-a:hover {
-    text-decoration: underline;
-}
-
-/* ── Auth container ── */
-.auth-container {
-    max-width: 420px;
-    margin: 64px auto;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    padding: 40px 36px;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card);
-}
-
-.auth-container h2 {
-    font-size: 1.75rem;
-    text-align: center;
-    margin-bottom: 8px;
-}
-
-.auth-container > p {
-    text-align: center;
-    margin-top: 24px;
-    font-size: 0.875rem;
-    color: var(--text-muted);
-}
-
-/* ── Header ── */
+ 
+a { color: var(--bleu-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+ 
+/* ----------------------------------------------------------------
+   Header — barre bleue nuit avec trait de couleur en bas (signature)
+   ---------------------------------------------------------------- */
 header {
-    background-color: var(--surface);
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-    padding: 18px 32px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    backdrop-filter: blur(8px);
+  background: var(--bleu-nuit);
+  color: var(--blanc);
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  /* Trait signature : dégradé bleu→violet en bas du header */
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--bleu-accent), var(--violet), var(--vert)) 1;
 }
-
+ 
 header h1 {
-    font-size: 1.25rem;
-    letter-spacing: 0.02em;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--blanc);
+  flex: 1;
 }
-
+ 
 #userInfo {
-    font-size: 0.875rem;
-    color: var(--text-muted);
+  font-size: .85rem;
+  color: #94A3B8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-
-#userInfo strong {
-    color: var(--text);
-    font-weight: 600;
+ 
+#userInfo strong { color: var(--blanc); }
+ 
+#headerNav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-
-/* ── Cards ── */
+ 
+#headerNav a {
+  color: #94A3B8;
+  font-size: .85rem;
+  font-weight: 500;
+  padding: 6px 14px;
+  border: 1px solid #334155;
+  border-radius: var(--radius);
+  transition: var(--transition);
+}
+ 
+#headerNav a:hover {
+  color: var(--blanc);
+  border-color: var(--bleu-accent);
+  background: rgba(37,99,235,.15);
+  text-decoration: none;
+}
+ 
+/* ----------------------------------------------------------------
+   Layout principal
+   ---------------------------------------------------------------- */
+.dashboard-content {
+  max-width: 900px;
+  margin: 36px auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+ 
+/* ----------------------------------------------------------------
+   Card — conteneur de section
+   ---------------------------------------------------------------- */
 .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    padding: 28px;
-    margin: 24px auto;
-    max-width: 800px;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card);
+  background: var(--blanc);
+  border: 1px solid var(--gris-bord);
+  border-radius: var(--radius-lg);
+  padding: 28px 32px;
+  box-shadow: var(--ombre);
 }
-
-/* ── Forms ── */
+ 
+.card h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 22px;
+  color: var(--bleu-nuit);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+ 
+.card h2::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--gris-bord);
+  margin-left: 12px;
+}
+ 
+.card h3 {
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--texte);
+  margin-bottom: 16px;
+}
+ 
+/* ----------------------------------------------------------------
+   Conteneur auth (login / inscription)
+   ---------------------------------------------------------------- */
+.auth-container {
+  width: 100%;
+  max-width: 440px;
+  margin: 80px auto;
+  background: var(--blanc);
+  border: 1px solid var(--gris-bord);
+  border-radius: var(--radius-lg);
+  padding: 40px 36px;
+  box-shadow: var(--ombre);
+}
+ 
+.auth-container h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--bleu-nuit);
+  margin-bottom: 28px;
+  /* trait accent sous le titre */
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--bleu-accent);
+}
+ 
+.auth-container p {
+  margin-top: 20px;
+  font-size: .875rem;
+  color: var(--gris-texte);
+  text-align: center;
+}
+ 
+/* ----------------------------------------------------------------
+   Formulaires
+   ---------------------------------------------------------------- */
 .form-group {
-    margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
 }
-
+ 
 .form-group label {
-    display: block;
-    margin-bottom: 6px;
-    font-weight: 600;
-    font-size: 0.8rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
+  font-size: .8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--gris-texte);
 }
-
+ 
 .form-group input,
 .form-group select,
 .form-group textarea {
-    width: 100%;
-    padding: 11px 14px;
-    box-sizing: border-box;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-family: var(--font-body);
-    font-size: 0.95rem;
-    transition: border-color 0.15s, box-shadow 0.15s;
+  padding: 10px 14px;
+  border: 1.5px solid var(--gris-bord);
+  border-radius: var(--radius);
+  font-family: 'Inter', sans-serif;
+  font-size: .9rem;
+  color: var(--texte);
+  background: var(--blanc);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  outline: none;
 }
-
-.form-group input::placeholder,
-.form-group textarea::placeholder {
-    color: var(--text-muted);
-}
-
+ 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--bleu-accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.12);
 }
-
+ 
 .form-group textarea {
-    min-height: 100px;
-    resize: vertical;
+  min-height: 90px;
+  resize: vertical;
 }
-
-/* Course code fields render as data, not prose */
-#code {
-    font-family: var(--font-mono);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-/* ── Buttons ── */
+ 
+hr { border: none; border-top: 1px solid var(--gris-bord); }
+ 
+/* ----------------------------------------------------------------
+   Boutons
+   ---------------------------------------------------------------- */
+ 
+/* Bouton principal bleu */
 .btn-submit {
-    background-color: var(--accent);
-    color: #1A1304;
-    border: none;
-    padding: 12px 18px;
-    font-family: var(--font-body);
-    font-weight: 600;
-    font-size: 0.95rem;
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    width: 100%;
-    transition: background-color 0.15s, transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--bleu-accent);
+  color: var(--blanc);
+  border: none;
+  border-radius: var(--radius);
+  padding: 11px 22px;
+  font-family: 'Inter', sans-serif;
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
+  width: 100%;
+  margin-top: 8px;
 }
-
+ 
 .btn-submit:hover {
-    background-color: #E8B65E;
+  background: var(--bleu-hover);
+  box-shadow: var(--ombre-hover);
+  transform: translateY(-1px);
 }
-
-.btn-submit:active {
-    transform: scale(0.99);
+ 
+.btn-submit:active { transform: translateY(0); }
+ 
+/* Bouton petit (dans les cartes cours) */
+.btn-small {
+  width: auto;
+  padding: 8px 16px;
+  font-size: .8rem;
+  margin-top: 0;
+  border-radius: 8px;
 }
-
-#logoutBtn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    padding: 8px 16px;
-    border-radius: var(--radius-sm);
-    font-family: var(--font-body);
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
+ 
+/* Bouton téléchargement PDF */
+.btn-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bleu-clair);
+  color: var(--bleu-accent);
+  border: 1.5px solid var(--bleu-accent);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+  text-decoration: none;
 }
-
-#logoutBtn:hover {
-    border-color: var(--error);
-    color: var(--error);
+ 
+.btn-download:hover {
+  background: var(--bleu-accent);
+  color: var(--blanc);
+  text-decoration: none;
 }
-
-.btn-evaluation, .btn-download {
-    display: inline-block;
-    background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    padding: 8px 16px;
-    border-radius: var(--radius-sm);
-    font-family: var(--font-body);
-    font-weight: 600;
-    font-size: 0.85rem;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background-color 0.15s, color 0.15s;
+ 
+/* Bouton évaluation */
+.btn-evaluation {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: var(--violet);
+  border: 1.5px solid var(--violet);
+  border-radius: var(--radius);
+  padding: 7px 14px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-top: 10px;
 }
-
-.btn-evaluation:hover, .btn-download:hover {
-    background-color: var(--accent);
-    color: #1A1304;
+ 
+.btn-evaluation:hover {
+  background: var(--violet);
+  color: var(--blanc);
 }
-
-/* ── Utility ── */
-.hidden {
-    display: none !important;
+ 
+/* Bouton approuver (vert) */
+.btn-approve {
+  background: var(--vert);
+  color: var(--blanc);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition);
 }
-
-/* ── Lessons ── */
+ 
+.btn-approve:hover { opacity: .85; }
+ 
+/* Bouton toggle activer/désactiver */
+.btn-toggle {
+  background: transparent;
+  color: var(--gris-texte);
+  border: 1.5px solid var(--gris-bord);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+ 
+.btn-toggle:hover {
+  border-color: var(--rouge);
+  color: var(--rouge);
+}
+ 
+/* ----------------------------------------------------------------
+   Carte de cours (liste des cours du prof)
+   ---------------------------------------------------------------- */
+.course-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1.5px solid var(--gris-bord);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  background: var(--blanc);
+  /* Trait couleur à gauche — signature Coursera-like */
+  border-left: 4px solid var(--bleu-accent);
+  transition: box-shadow var(--transition), border-left-color var(--transition);
+  cursor: default;
+}
+ 
+.course-card:hover {
+  box-shadow: var(--ombre-hover);
+  border-left-color: var(--violet);
+}
+ 
+.course-info h3 {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--bleu-nuit);
+  margin-bottom: 4px;
+}
+ 
+.course-info p {
+  font-size: .83rem;
+  color: var(--gris-texte);
+  margin: 4px 0;
+}
+ 
+.course-info small {
+  font-size: .78rem;
+  color: #94A3B8;
+}
+ 
+.course-code {
+  display: inline-block;
+  background: var(--bleu-clair);
+  color: var(--bleu-accent);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 2px 10px;
+  border-radius: 20px;
+  margin-bottom: 6px;
+}
+ 
+/* ----------------------------------------------------------------
+   Item de leçon
+   ---------------------------------------------------------------- */
 .lecon-item {
-    border-left: 3px solid var(--accent);
-    border-radius: var(--radius-sm);
-    padding: 16px 18px;
-    margin-bottom: 16px;
-    background: var(--surface-raised);
+  padding: 16px 18px;
+  border: 1px solid var(--gris-bord);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  background: var(--gris-fond);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-
+ 
 .lecon-item h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    margin-bottom: 12px;
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--texte);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
 }
-
+ 
 .lecon-item video {
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    display: block;
-    margin-bottom: 12px;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 380px;
 }
-
-/* ── Status badges (role / course status) ── */
+ 
+/* ----------------------------------------------------------------
+   Badges PDF / Vidéo
+   ---------------------------------------------------------------- */
 .badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+  display: inline-block;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  border-radius: 20px;
 }
-
-.badge-student { background: rgba(74,110,222,0.14); color: #8AAAF0; border: 1px solid rgba(74,110,222,0.35); }
-.badge-teacher { background: var(--success-soft); color: var(--success); border: 1px solid rgba(74,222,128,0.35); }
-.badge-admin   { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--border-soft); }
-
-/* ── Focus visibility (accessibility) ── */
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+ 
+.badge-pdf   { background: #FEF3C7; color: #92400E; }
+.badge-video { background: #EDE9FE; color: #5B21B6; }
+ 
+/* ----------------------------------------------------------------
+   Badge de rôle (header)
+   ---------------------------------------------------------------- */
+.role-badge {
+  display: inline-block;
+  background: rgba(37,99,235,.15);
+  color: #93C5FD;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-style: normal;
 }
-
-/* ── Reduced motion ── */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        transition: none !important;
-        animation: none !important;
-    }
+ 
+/* ----------------------------------------------------------------
+   État vide
+   ---------------------------------------------------------------- */
+.empty-state {
+  text-align: center;
+  color: var(--gris-texte);
+  font-size: .875rem;
+  padding: 32px 0;
+  font-style: italic;
 }
-
-/* ── Responsive ── */
+ 
+/* ----------------------------------------------------------------
+   Utilitaire
+   ---------------------------------------------------------------- */
+.hidden { display: none !important; }
+ 
+/* ----------------------------------------------------------------
+   Listes admin (admins, enseignants)
+   ---------------------------------------------------------------- */
+ul { list-style: none; padding: 0; }
+ 
+ul li {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gris-bord);
+  font-size: .875rem;
+  color: var(--texte);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+ 
+ul li:last-child { border-bottom: none; }
+ 
+ul li::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vert);
+  flex-shrink: 0;
+}
+ 
+/* ----------------------------------------------------------------
+   Responsive
+   ---------------------------------------------------------------- */
 @media (max-width: 600px) {
-    .auth-container {
-        margin: 32px 16px;
-        padding: 28px 24px;
-    }
-
-    header {
-        padding: 14px 18px;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .card {
-        margin: 16px;
-        padding: 20px;
-    }
+  header {
+    padding: 0 16px;
+    height: auto;
+    flex-wrap: wrap;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    gap: 10px;
+  }
+ 
+  .dashboard-content { margin: 20px auto; padding: 0 12px; }
+ 
+  .card { padding: 20px 18px; }
+ 
+  .auth-container { margin: 40px 16px; padding: 28px 20px; }
+ 
+  .course-card { flex-direction: column; align-items: flex-start; }
+ 
+  .btn-submit { font-size: .85rem; }
 }
+ 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}
+ 
