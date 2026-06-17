@@ -58,9 +58,25 @@ try {
  
 $action = $_GET['action'] ?? '';
 $data = json_decode(file_get_contents('php://input'), true);
- 
+
+// Vérifie que l'utilisateur connecté est admin, sinon renvoie une erreur et arrête
+function requireAdmin() {
+    if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+        echo json_encode(["status" => "error", "message" => "Accès refusé : réservé aux administrateurs."]);
+        exit;
+    }
+}
+
 try {
 switch ($action) {
+    // Vérifie si l'utilisateur connecté est admin (pour protéger admin.html côté client)
+    case 'is_admin':
+        echo json_encode([
+            "status" => "success",
+            "isAdmin" => isset($_SESSION['role']) && $_SESSION['role'] === 'admin'
+        ]);
+        break;
+
     case 'register':
         // 1. Vérification si l'email existe déjà
         $check = $bdd->prepare('SELECT id FROM users WHERE email = ?');
@@ -113,12 +129,84 @@ switch ($action) {
         }
     break;
  
-    // Action pour le Promoteur : Valider le dossier d'un enseignant
+    // Action pour l'admin : Valider (ou rejeter) le compte d'un enseignant
     case 'approver_enseignant':
-        if (!isset($data['teacher_id']) || !isset($data['decision'])) break;
-        $req = $bdd->prepare('UPDATE users SET status_approbation = ? WHERE id = ? AND role = "teacher"');
-        $req->execute([$data['decision'], $data['teacher_id']]);
-        echo json_encode(["status" => "success", "message" => "Le statut de l'enseignant a été mis à jour (Etude de dossier)."]);
+        requireAdmin();
+        if (!isset($data['teacher_id']) || !isset($data['decision'])) {
+            echo json_encode(["status" => "error", "message" => "Paramètres manquants."]);
+            break;
+        }
+        $isActiveValue = intval($data['decision']) ? 1 : 0;
+        $req = $bdd->prepare('UPDATE users SET isActive = ? WHERE id = ? AND role = "teacher"');
+        $req->execute([$isActiveValue, $data['teacher_id']]);
+        $msg = $isActiveValue
+            ? "Le compte de l'enseignant a été activé."
+            : "Le compte de l'enseignant a été désactivé.";
+        echo json_encode(["status" => "success", "message" => $msg]);
+        break;
+
+    // Liste des enseignants en attente d'activation
+    case 'get_pending_teachers':
+        requireAdmin();
+        $req = $bdd->prepare("SELECT id, firstName, lastName, email FROM users WHERE role = 'teacher' AND isActive = 0");
+        $req->execute();
+        echo json_encode(["status" => "success", "teachers" => $req->fetchAll()]);
+        break;
+
+    // Liste de tous les enseignants (actifs et inactifs)
+    case 'get_teachers':
+        requireAdmin();
+        $req = $bdd->prepare("SELECT id, firstName, lastName, email, isActive FROM users WHERE role = 'teacher'");
+        $req->execute();
+        echo json_encode(["status" => "success", "teachers" => $req->fetchAll()]);
+        break;
+
+    // Promouvoir un utilisateur existant au rôle admin (par email)
+    case 'promote_admin':
+        requireAdmin();
+        if (empty($data['email'])) {
+            echo json_encode(["status" => "error", "message" => "Email manquant."]);
+            break;
+        }
+        $req = $bdd->prepare("UPDATE users SET role = 'admin', isActive = 1 WHERE email = ?");
+        $req->execute([$data['email']]);
+        if ($req->rowCount() === 0) {
+            echo json_encode(["status" => "error", "message" => "Aucun utilisateur trouvé avec cet email."]);
+        } else {
+            echo json_encode(["status" => "success", "message" => "Utilisateur promu administrateur."]);
+        }
+        break;
+
+    // Liste des administrateurs
+    case 'get_admins':
+        requireAdmin();
+        $req = $bdd->prepare("SELECT id, firstName, lastName, email FROM users WHERE role = 'admin'");
+        $req->execute();
+        echo json_encode(["status" => "success", "admins" => $req->fetchAll()]);
+        break;
+
+    // Liste des cours existants
+    case 'get_courses':
+        requireAdmin();
+        $req = $bdd->prepare("SELECT id, title, code, teacherId FROM courses ORDER BY id DESC");
+        $req->execute();
+        echo json_encode(["status" => "success", "courses" => $req->fetchAll()]);
+        break;
+
+    // Ajouter une leçon (PDF ou vidéo) à un cours
+    case 'add_lesson':
+        requireAdmin();
+        if (empty($data['course_id']) || empty($data['title']) || empty($data['content_type']) || empty($data['file_path'])) {
+            echo json_encode(["status" => "error", "message" => "Champs manquants."]);
+            break;
+        }
+        if (!in_array($data['content_type'], ['pdf', 'video'])) {
+            echo json_encode(["status" => "error", "message" => "content_type doit être 'pdf' ou 'video'."]);
+            break;
+        }
+        $req = $bdd->prepare('INSERT INTO lessons (course_id, title, content_type, file_path) VALUES (?, ?, ?, ?)');
+        $req->execute([$data['course_id'], $data['title'], $data['content_type'], $data['file_path']]);
+        echo json_encode(["status" => "success", "message" => "Leçon ajoutée avec succès."]);
         break;
  
     case 'create_course':
