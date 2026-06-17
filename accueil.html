@@ -10,77 +10,174 @@
     <header>
         <h1>Mon Espace d'Apprentissage</h1>
         <div id="userInfo"></div>
-        <button id="logoutBtn">Déconnexion</button>
+        <nav id="headerNav">
+            <a href="admin.html" id="adminLink" class="hidden">⚙️ Administration</a>
+            <button id="logoutBtn">Déconnexion</button>
+        </nav>
     </header>
-
+ 
     <main class="dashboard-content">
-        <section id="teacherSection" class="card hidden">
-            <h2>Espace Enseignant - Créer un cours</h2>
-            <form id="courseForm">
-                <div class="form-group">
-                    <label for="titre">Titre du cours :</label>
-                    <input type="text" id="titre" required>
-                </div>
-                <div class="form-group">
-                    <label for="code">Code du cours (ex: INF201) :</label>
-                    <input type="text" id="code" required>
-                </div>
-                <div class="form-group">
-                    <label for="description">Description :</label>
-                    <textarea id="description" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="maxetudiant">Nombre max d'étudiants :</label>
-                    <input type="number" id="maxetudiant" required>
-                </div>
-                <button type="submit" class="btn-submit">Ajouter le cours</button>
-            </form>
+ 
+        <!-- ======== SECTION PROFESSEUR / ADMIN ======== -->
+        <section id="teacherSection" class="hidden">
+ 
+            <!-- Créer un cours -->
+            <section class="card">
+                <h2>➕ Créer un nouveau cours</h2>
+                <form id="courseForm">
+                    <div class="form-group">
+                        <label for="titre">Titre du cours :</label>
+                        <input type="text" id="titre" required placeholder="ex: Introduction aux algorithmes">
+                    </div>
+                    <div class="form-group">
+                        <label for="code">Code du cours :</label>
+                        <input type="text" id="code" required placeholder="ex: INF201">
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description :</label>
+                        <textarea id="description" required placeholder="Décrivez brièvement votre cours..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="maxetudiant">Nombre max d'étudiants :</label>
+                        <input type="number" id="maxetudiant" required min="1" placeholder="ex: 50">
+                    </div>
+                    <button type="submit" class="btn-submit">Créer le cours</button>
+                </form>
+            </section>
+ 
+            <!-- Mes cours avec gestion des leçons -->
+            <section class="card">
+                <h2>📚 Mes cours</h2>
+                <div id="mesCours"><p>Chargement...</p></div>
+            </section>
+ 
+            <!-- Panneau de gestion des leçons (s'affiche quand un cours est sélectionné) -->
+            <section class="card hidden" id="gestionLecons">
+                <h2>📖 Leçons du cours : <span id="coursTitreActif"></span></h2>
+                <div id="lessonsList"><p>Chargement...</p></div>
+ 
+                <hr style="margin: 20px 0;">
+                <h3>Ajouter une leçon</h3>
+                <form id="lessonForm">
+                    <input type="hidden" id="lessonCourseId">
+                    <div class="form-group">
+                        <label for="lessonTitle">Titre de la leçon :</label>
+                        <input type="text" id="lessonTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contentType">Type de contenu :</label>
+                        <select id="contentType" required>
+                            <option value="pdf">PDF</option>
+                            <option value="video">Vidéo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filePath">URL du fichier :</label>
+                        <input type="url" id="filePath" required placeholder="https://exemple.com/fichier.pdf">
+                    </div>
+                    <button type="submit" class="btn-submit">Ajouter la leçon</button>
+                </form>
+            </section>
         </section>
-
-        <section class="card">
-            <h2>Leçons disponibles (Cours Exemple)</h2>
-            <div id="lessonsContainer">
-                <p>Chargement des leçons...</p>
-            </div>
+ 
+        <!-- ======== SECTION ÉTUDIANT ======== -->
+        <section id="studentSection" class="card hidden">
+            <h2>📖 Leçons disponibles</h2>
+            <div id="lessonsContainer"><p>Chargement des leçons...</p></div>
         </section>
+ 
     </main>
-
+ 
     <script type="module">
-        import { CreeCours, chargerLeconsDuCours } from './app.js';
-
-        // 1. Récupération de l'utilisateur connecté
+        import { CreeCours, chargerLeconsDuCours, chargerMesCours } from './app.js';
+ 
         const userJson = localStorage.getItem('User');
         if (!userJson) {
             window.location.href = 'index.html';
         } else {
             const user = JSON.parse(userJson);
-
-            // Affichage des informations de bienvenue
-            document.getElementById('userInfo').innerHTML = `<span>Connecté en tant que : <strong>${user.firstName} ${user.lastName}</strong> (${user.role})</span>`;
-
-            // 2. Gestion des accès selon le rôle
+            const API = 'serveur.php';
+ 
+            // Affichage du nom
+            document.getElementById('userInfo').innerHTML =
+                `<span>Bienvenue, <strong>${user.firstName} ${user.lastName}</strong> 
+                 <em class="role-badge">${user.role}</em></span>`;
+ 
+            // Lien admin visible seulement pour l'admin
+            if (user.role === 'admin') {
+                document.getElementById('adminLink').classList.remove('hidden');
+            }
+ 
+            // Affichage des sections selon le rôle
             if (user.role === 'teacher' || user.role === 'admin') {
                 document.getElementById('teacherSection').classList.remove('hidden');
+ 
+                // Charger la liste des cours du prof
+                const conteneurCours = document.getElementById('mesCours');
+                chargerMesCours(conteneurCours, (cours) => ouvrirGestionLecons(cours));
+ 
+                // Soumission : créer un cours
+                document.getElementById('courseForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const donneesCours = {
+                        titre: document.getElementById('titre').value,
+                        code: document.getElementById('code').value,
+                        description: document.getElementById('description').value,
+                        teacherid: parseInt(user.id),
+                        maxetudiant: parseInt(document.getElementById('maxetudiant').value)
+                    };
+                    await CreeCours(donneesCours);
+                    // Recharger la liste des cours après création
+                    chargerMesCours(conteneurCours, (cours) => ouvrirGestionLecons(cours));
+                });
+ 
+                // Soumission : ajouter une leçon
+                document.getElementById('lessonForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const courseId = document.getElementById('lessonCourseId').value;
+                    const payload = {
+                        course_id: parseInt(courseId),
+                        title: document.getElementById('lessonTitle').value,
+                        content_type: document.getElementById('contentType').value,
+                        file_path: document.getElementById('filePath').value
+                    };
+                    try {
+                        const res = await fetch(`${API}?action=add_lesson`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json();
+                        alert(data.message);
+                        if (data.status === 'success') {
+                            document.getElementById('lessonForm').reset();
+                            document.getElementById('lessonCourseId').value = courseId;
+                            // Recharger les leçons
+                            chargerLeconsDuCours(courseId, document.getElementById('lessonsList'));
+                        }
+                    } catch (err) {
+                        alert("Erreur lors de l'ajout de la leçon.");
+                        console.error(err);
+                    }
+                });
+ 
+            } else {
+                // Étudiant : voir les leçons du cours 1 par défaut
+                document.getElementById('studentSection').classList.remove('hidden');
+                chargerLeconsDuCours(1, document.getElementById('lessonsContainer'));
             }
-
-            // 3. Soumission du formulaire de création de cours (Enseignant)
-            document.getElementById('courseForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const donneesCours = {
-                    titre: document.getElementById('titre').value,
-                    code: document.getElementById('code').value,
-                    description: document.getElementById('description').value,
-                    teacherid: parseInt(user.id), // Cast nécessaire pour Zod
-                    maxetudiant: parseInt(document.getElementById('maxetudiant').value)
-                };
-                await CreeCours(donneesCours);
-            });
-
-            // 4. Chargement dynamique des leçons (On prend l'ID de cours 1 pour l'exemple)
-            const conteneurHtml = document.getElementById('lessonsContainer');
-            chargerLeconsDuCours(1, conteneurHtml);
-
-            // 5. Gestion de la déconnexion
+ 
+            // Ouvrir le panneau de gestion des leçons pour un cours donné
+            function ouvrirGestionLecons(cours) {
+                const section = document.getElementById('gestionLecons');
+                section.classList.remove('hidden');
+                document.getElementById('coursTitreActif').textContent = `${cours.title} (${cours.code})`;
+                document.getElementById('lessonCourseId').value = cours.id;
+                chargerLeconsDuCours(cours.id, document.getElementById('lessonsList'));
+                section.scrollIntoView({ behavior: 'smooth' });
+            }
+ 
+            // Déconnexion
             document.getElementById('logoutBtn').addEventListener('click', () => {
                 localStorage.removeItem('User');
                 window.location.href = 'index.html';
