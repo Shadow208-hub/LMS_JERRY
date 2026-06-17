@@ -1,4 +1,3 @@
-
 <?php
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
@@ -39,7 +38,10 @@ function creerToken(int $userId, string $role): string {
 }
  
 function verifierToken(): ?array {
-    $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+    $auth = $_SERVER['HTTP_AUTHORIZATION']
+         ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+         ?? (function_exists('apache_request_headers') ? (apache_request_headers()['Authorization'] ?? '') : '')
+         ?? '';
     if (!$auth || !str_starts_with($auth, 'Bearer ')) return null;
     $token = substr($auth, 7);
     $parts = explode('.', $token);
