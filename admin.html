@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS - Administration</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Espace Administration</h1>
+        <a href="accueil.html" style="color:#fff;">← Retour à l'accueil</a>
+    </header>
+
+    <main class="dashboard-content">
+
+        <section class="card">
+            <h2>Administrateurs</h2>
+            <div id="adminsList"><p>Chargement...</p></div>
+            <form id="promoteForm" style="margin-top:15px;">
+                <div class="form-group">
+                    <label for="newAdminEmail">Promouvoir un utilisateur existant en administrateur (email) :</label>
+                    <input type="email" id="newAdminEmail" required placeholder="email@exemple.com">
+                </div>
+                <button type="submit" class="btn-submit">Promouvoir</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Enseignants en attente d'activation</h2>
+            <div id="pendingTeachers"><p>Chargement...</p></div>
+        </section>
+
+        <section class="card">
+            <h2>Tous les enseignants</h2>
+            <div id="allTeachers"><p>Chargement...</p></div>
+        </section>
+
+        <section class="card">
+            <h2>Ajouter une leçon (PDF ou Vidéo) à un cours</h2>
+            <form id="lessonForm">
+                <div class="form-group">
+                    <label for="course_id">Cours :</label>
+                    <select id="course_id" required>
+                        <option value="">Chargement des cours...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="lessonTitle">Titre de la leçon :</label>
+                    <input type="text" id="lessonTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="contentType">Type de contenu :</label>
+                    <select id="contentType" required>
+                        <option value="pdf">PDF</option>
+                        <option value="video">Vidéo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filePath">URL du fichier (PDF ou vidéo) :</label>
+                    <input type="url" id="filePath" required placeholder="https://exemple.com/fichier.pdf">
+                </div>
+                <button type="submit" class="btn-submit">Ajouter la leçon</button>
+            </form>
+        </section>
+
+    </main>
+
+    <script>
+        const API = 'serveur.php';
+
+        // --- Vérification d'accès : redirige si l'utilisateur n'est pas admin ---
+        async function verifierAcces() {
+            try {
+                const res = await fetch(`${API}?action=is_admin`);
+                const data = await res.json();
+                if (!data.isAdmin) {
+                    alert("Accès réservé aux administrateurs.");
+                    window.location.href = 'index.html';
+                    return false;
+                }
+                return true;
+            } catch (err) {
+                window.location.href = 'index.html';
+                return false;
+            }
+        }
+
+        // --- Charger la liste des administrateurs ---
+        async function chargerAdmins() {
+            const container = document.getElementById('adminsList');
+            try {
+                const res = await fetch(`${API}?action=get_admins`);
+                const data = await res.json();
+                if (data.status !== 'success' || data.admins.length === 0) {
+                    container.innerHTML = '<p>Aucun administrateur.</p>';
+                    return;
+                }
+                container.innerHTML = '<ul>' + data.admins.map(a =>
+                    `<li>${a.firstName} ${a.lastName} (${a.email})</li>`
+                ).join('') + '</ul>';
+            } catch (err) {
+                container.innerHTML = '<p>Erreur de chargement.</p>';
+                console.error(err);
+            }
+        }
+
+        // --- Promouvoir un utilisateur en admin ---
+        document.getElementById('promoteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('newAdminEmail').value;
+            try {
+                const res = await fetch(`${API}?action=promote_admin`, {
+                    method: 'POST',
+                    headers: {'Content-type': 'application/json'},
+                    body: JSON.stringify({email})
+                });
+                const data = await res.json();
+                alert(data.message);
+                if (data.status === 'success') {
+                    document.getElementById('promoteForm').reset();
+                    chargerAdmins();
+                }
+            } catch (err) {
+                alert("Erreur lors de la promotion.");
+                console.error(err);
+            }
+        });
+
+        // --- Charger les enseignants en attente ---
+        async function chargerEnseignantsEnAttente() {
+            const container = document.getElementById('pendingTeachers');
+            try {
+                const res = await fetch(`${API}?action=get_pending_teachers`);
+                const data = await res.json();
+                if (data.status !== 'success' || data.teachers.length === 0) {
+                    container.innerHTML = '<p>Aucun enseignant en attente.</p>';
+                    return;
+                }
+                container.innerHTML = '';
+                data.teachers.forEach(t => {
+                    const div = document.createElement('div');
+                    div.className = 'lecon-item';
+                    div.innerHTML = `
+                        <strong>${t.firstName} ${t.lastName}</strong> (${t.email})
+                        <button data-id="${t.id}" class="btn-approve">Approuver</button>
+                    `;
+                    div.querySelector('.btn-approve').addEventListener('click', async () => {
+                        await approuverEnseignant(t.id, 1);
+                    });
+                    container.appendChild(div);
+                });
+            } catch (err) {
+                container.innerHTML = '<p>Erreur de chargement.</p>';
+                console.error(err);
+            }
+        }
+
+        // --- Charger tous les enseignants ---
+        async function chargerTousEnseignants() {
+            const container = document.getElementById('allTeachers');
+            try {
+                const res = await fetch(`${API}?action=get_teachers`);
+                const data = await res.json();
+                if (data.status !== 'success' || data.teachers.length === 0) {
+                    container.innerHTML = '<p>Aucun enseignant enregistré.</p>';
+                    return;
+                }
+                container.innerHTML = '';
+                data.teachers.forEach(t => {
+                    const div = document.createElement('div');
+                    div.className = 'lecon-item';
+                    const statut = parseInt(t.isActive) === 1 ? 'Actif ✅' : 'Inactif ⏳';
+                    const actionLabel = parseInt(t.isActive) === 1 ? 'Désactiver' : 'Activer';
+                    div.innerHTML = `
+                        <strong>${t.firstName} ${t.lastName}</strong> (${t.email}) — ${statut}
+                        <button data-id="${t.id}" data-decision="${parseInt(t.isActive) === 1 ? 0 : 1}" class="btn-toggle">${actionLabel}</button>
+                    `;
+                    div.querySelector('.btn-toggle').addEventListener('click', async (e) => {
+                        const decision = parseInt(e.target.dataset.decision);
+                        await approuverEnseignant(t.id, decision);
+                    });
+                    container.appendChild(div);
+                });
+            } catch (err) {
+                container.innerHTML = '<p>Erreur de chargement.</p>';
+                console.error(err);
+            }
+        }
+
+        async function approuverEnseignant(teacherId, decision) {
+            try {
+                const res = await fetch(`${API}?action=approver_enseignant`, {
+                    method: 'POST',
+                    headers: {'Content-type': 'application/json'},
+                    body: JSON.stringify({teacher_id: teacherId, decision})
+                });
+                const data = await res.json();
+                alert(data.message);
+                chargerEnseignantsEnAttente();
+                chargerTousEnseignants();
+            } catch (err) {
+                alert("Erreur lors de la mise à jour.");
+                console.error(err);
+            }
+        }
+
+        // --- Charger la liste des cours pour le formulaire de leçon ---
+        async function chargerCours() {
+            const select = document.getElementById('course_id');
+            try {
+                const res = await fetch(`${API}?action=get_courses`);
+                const data = await res.json();
+                if (data.status !== 'success' || data.courses.length === 0) {
+                    select.innerHTML = '<option value="">Aucun cours disponible</option>';
+                    return;
+                }
+                select.innerHTML = '';
+                data.courses.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = `${c.title} (${c.code})`;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                select.innerHTML = '<option value="">Erreur de chargement</option>';
+                console.error(err);
+            }
+        }
+
+        // --- Formulaire d'ajout de leçon ---
+        document.getElementById('lessonForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const courseId = document.getElementById('course_id').value;
+            if (!courseId) {
+                alert("Veuillez sélectionner un cours.");
+                return;
+            }
+            const payload = {
+                course_id: parseInt(courseId),
+                title: document.getElementById('lessonTitle').value,
+                content_type: document.getElementById('contentType').value,
+                file_path: document.getElementById('filePath').value
+            };
+            try {
+                const res = await fetch(`${API}?action=add_lesson`, {
+                    method: 'POST',
+                    headers: {'Content-type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                alert(data.message);
+                if (data.status === 'success') {
+                    document.getElementById('lessonForm').reset();
+                }
+            } catch (err) {
+                alert("Erreur lors de l'ajout de la leçon.");
+                console.error(err);
+            }
+        });
+
+        // Initialisation
+        (async () => {
+            const ok = await verifierAcces();
+            if (!ok) return;
+            chargerAdmins();
+            chargerEnseignantsEnAttente();
+            chargerTousEnseignants();
+            chargerCours();
+        })();
+    </script>
+</body>
+</html>
