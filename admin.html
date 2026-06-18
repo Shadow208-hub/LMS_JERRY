@@ -55,15 +55,27 @@
                 <div class="form-group">
                     <label for="contentType">Type de contenu :</label>
                     <select id="contentType" required>
-                        <option value="pdf">PDF</option>
-                        <option value="video">Vidéo</option>
+                        <option value="pdf">📄 PDF</option>
+                        <option value="video">🎬 Vidéo</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="filePath">URL du fichier :</label>
-                    <input type="url" id="filePath" required placeholder="https://exemple.com/fichier.pdf">
+                <!-- PDF : upload depuis l'appareil -->
+                <div class="form-group" id="pdfGroup">
+                    <label for="pdfFile">Fichier PDF :</label>
+                    <input type="file" id="pdfFile" accept=".pdf">
+                    <small style="color:#94A3B8;">Sélectionnez un fichier PDF depuis votre appareil.</small>
                 </div>
-                <button type="submit" class="btn-submit">Ajouter la leçon</button>
+                <!-- Vidéo : URL uniquement -->
+                <div class="form-group hidden" id="videoGroup">
+                    <label for="videoUrl">URL de la vidéo :</label>
+                    <input type="url" id="videoUrl" placeholder="https://youtube.com/watch?v=...">
+                    <small style="color:#94A3B8;">Lien YouTube, Google Drive ou tout lien direct.</small>
+                </div>
+                <div id="uploadProgress" class="hidden" style="margin-top:8px;">
+                    <progress id="progressBar" value="0" max="100" style="width:100%;"></progress>
+                    <small id="progressLabel">Envoi en cours...</small>
+                </div>
+                <button type="submit" class="btn-submit" id="lessonSubmitBtn">Ajouter la leçon</button>
             </form>
         </section>
  
@@ -203,24 +215,74 @@
             } catch (err) { select.innerHTML = '<option value="">Erreur de chargement</option>'; }
         }
  
+        // Basculer entre PDF upload et URL vidéo
+        document.getElementById('contentType').addEventListener('change', function () {
+            const isPdf = this.value === 'pdf';
+            document.getElementById('pdfGroup').classList.toggle('hidden', !isPdf);
+            document.getElementById('videoGroup').classList.toggle('hidden', isPdf);
+            document.getElementById('pdfFile').required = isPdf;
+            document.getElementById('videoUrl').required = !isPdf;
+        });
+        document.getElementById('pdfFile').required = true;
+
         document.getElementById('lessonForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const courseId = document.getElementById('course_id').value;
+            const courseId    = document.getElementById('course_id').value;
+            const contentType = document.getElementById('contentType').value;
+            const title       = document.getElementById('lessonTitle').value;
+            const btn         = document.getElementById('lessonSubmitBtn');
             if (!courseId) { alert("Veuillez sélectionner un cours."); return; }
-            const payload = {
-                course_id:    parseInt(courseId),
-                title:        document.getElementById('lessonTitle').value,
-                content_type: document.getElementById('contentType').value,
-                file_path:    document.getElementById('filePath').value
-            };
+
+            btn.disabled = true; btn.textContent = 'Envoi en cours...';
+
             try {
-                const res  = await fetch(`${API}?action=add_lesson`, {
-                    method: 'POST', headers: authHJson(), body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                alert(data.message);
-                if (data.status === 'success') document.getElementById('lessonForm').reset();
-            } catch (err) { alert("Erreur lors de l'ajout de la leçon."); }
+                if (contentType === 'pdf') {
+                    const pdfFile = document.getElementById('pdfFile').files[0];
+                    if (!pdfFile) { alert("Veuillez sélectionner un fichier PDF."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                    const formData = new FormData();
+                    formData.append('course_id',    courseId);
+                    formData.append('title',        title);
+                    formData.append('content_type', 'pdf');
+                    formData.append('token',        localStorage.getItem('token') || '');
+                    formData.append('pdf_file',     pdfFile);
+
+                    const progressZone = document.getElementById('uploadProgress');
+                    const progressBar  = document.getElementById('progressBar');
+                    const progressLbl  = document.getElementById('progressLabel');
+                    progressZone.classList.remove('hidden');
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', (ev) => {
+                        if (ev.lengthComputable) {
+                            const pct = Math.round((ev.loaded / ev.total) * 100);
+                            progressBar.value = pct; progressLbl.textContent = `Envoi : ${pct}%`;
+                        }
+                    });
+                    xhr.onload = () => {
+                        progressZone.classList.add('hidden');
+                        btn.disabled = false; btn.textContent = 'Ajouter la leçon';
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            alert(data.message);
+                            if (data.status === 'success') document.getElementById('lessonForm').reset();
+                        } catch { alert("Réponse serveur invalide."); }
+                    };
+                    xhr.onerror = () => { alert("Erreur réseau."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; };
+                    xhr.open('POST', `${API}?action=add_lesson`);
+                    xhr.send(formData);
+                } else {
+                    const videoUrl = document.getElementById('videoUrl').value;
+                    if (!videoUrl) { alert("Veuillez entrer l'URL de la vidéo."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                    const res  = await fetch(`${API}?action=add_lesson`, {
+                        method: 'POST', headers: authHJson(),
+                        body: JSON.stringify({ course_id: parseInt(courseId), title, content_type: 'video', file_path: videoUrl })
+                    });
+                    const data = await res.json();
+                    alert(data.message);
+                    if (data.status === 'success') document.getElementById('lessonForm').reset();
+                    btn.disabled = false; btn.textContent = 'Ajouter la leçon';
+                }
+            } catch (err) { alert("Erreur lors de l'ajout de la leçon."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; }
         });
  
         document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -240,4 +302,3 @@
     </script>
 </body>
 </html>
- 
