@@ -93,9 +93,18 @@
         </section>
  
         <!-- ======== SECTION ÉTUDIANT ======== -->
-        <section id="studentSection" class="card hidden">
-            <h2>📖 Leçons disponibles</h2>
-            <div id="lessonsContainer"><p>Chargement des leçons...</p></div>
+        <section id="studentSection" class="hidden">
+
+            <section class="card">
+                <h2>📚 Cours disponibles</h2>
+                <div id="coursesContainer"><p>Chargement des cours...</p></div>
+            </section>
+
+            <section class="card hidden" id="studentLessonsSection">
+                <h2>📖 Leçons : <span id="studentCourseTitre"></span></h2>
+                <div id="lessonsContainer"><p>Chargement des leçons...</p></div>
+            </section>
+
         </section>
  
     </main>
@@ -239,9 +248,9 @@
                 });
  
             } else {
-                // Étudiant : voir les leçons du cours 1 par défaut
-                document.getElementById('studentSection').classList.remove('hidden');
-                chargerLeconsDuCours(1, document.getElementById('lessonsContainer'));
+                // Étudiant : charger la liste de tous les cours
+                document's.getElementById('studentSection').classList.remove('hidden');
+                chargerCoursPourEtudiant();
             }
  
             // Ouvrir le panneau de gestion des leçons pour un cours donné
@@ -254,6 +263,41 @@
                 section.scrollIntoView({ behavior: 'smooth' });
             }
  
+
+            // Charger tous les cours pour l'étudiant
+            async function chargerCoursPourEtudiant() {
+                const conteneur = document.getElementById('coursesContainer');
+                try {
+                    const res  = await fetch(`${API}?action=get_courses`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` } });
+                    const data = await res.json();
+                    if (data.status !== 'success' || data.courses.length === 0) {
+                        conteneur.innerHTML = '<p class="empty-state">Aucun cours disponible pour le moment.</p>';
+                        return;
+                    }
+                    conteneur.innerHTML = '';
+                    data.courses.forEach(cours => {
+                        const div = document.createElement('div');
+                        div.className = 'course-card';
+                        div.innerHTML = `
+                            <div class="course-info">
+                                <h3>${cours.title}</h3>
+                                <span class="course-code">${cours.code}</span>
+                                <p>${cours.description || ''}</p>
+                            </div>
+                            <button class="btn-submit btn-small">Voir les leçons →</button>`;
+                        div.querySelector('button').addEventListener('click', () => {
+                            document.getElementById('studentCourseTitre').textContent = `${cours.title} (${cours.code})`;
+                            const section = document.getElementById('studentLessonsSection');
+                            section.classList.remove('hidden');
+                            chargerLeconsDuCours(cours.id, document.getElementById('lessonsContainer'));
+                            section.scrollIntoView({ behavior: 'smooth' });
+                        });
+                        conteneur.appendChild(div);
+                    });
+                } catch (err) {
+                    conteneur.innerHTML = '<p>Erreur de chargement des cours.</p>';
+                }
+            }
             // Déconnexion
             document.getElementById('logoutBtn').addEventListener('click', () => {
                 localStorage.removeItem('User');
