@@ -286,10 +286,15 @@ switch ($action) {
     // ------------------------------------------------------------------
     case 'get_courses':
         $auth = requireAuth();
-        if ($auth['role'] === 'admin') {
+        if ($auth['role'] === 'student') {
+            // L'étudiant voit tous les cours disponibles
+            $req = $bdd->prepare("SELECT id, title, code, description FROM courses ORDER BY id DESC");
+            $req->execute();
+        } elseif ($auth['role'] === 'admin') {
             $req = $bdd->prepare("SELECT id, title, code, teacherId FROM courses ORDER BY id DESC");
             $req->execute();
         } else {
+            // teacher : ses cours uniquement
             $req = $bdd->prepare("SELECT id, title, code, teacherId FROM courses WHERE teacherId = ? ORDER BY id DESC");
             $req->execute([$auth['uid']]);
         }
