@@ -38,10 +38,7 @@ function creerToken(int $userId, string $role): string {
 }
  
 function verifierToken(): ?array {
-    $auth = $_SERVER['HTTP_AUTHORIZATION']
-         ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
-         ?? (function_exists('apache_request_headers') ? (apache_request_headers()['Authorization'] ?? '') : '')
-         ?? '';
+    $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
     if (!$auth || !str_starts_with($auth, 'Bearer ')) return null;
     $token = substr($auth, 7);
     $parts = explode('.', $token);
@@ -173,29 +170,95 @@ switch ($action) {
  
     // ------------------------------------------------------------------
     case 'add_lesson':
-        $auth = requireAuth();
+        // Le token peut arriver soit en header Authorization, soit dans $_POST['token'] (FormData upload)
+        $tokenData = verifierToken();
+        if (!$tokenData && !empty($_POST['token'])) {
+            // Vérification manuelle depuis le champ FormData
+            $tkRaw  = $_POST['token'];
+            $parts  = explode('.', $tkRaw);
+            if (count($parts) === 3) {
+                [$hdr, $pld, $sg] = $parts;
+                $expSig = base64url_encode(hash_hmac('sha256', "$hdr.$pld", TOKEN_SECRET, true));
+                if (hash_equals($expSig, $sg)) {
+                    $decoded = json_decode(base64url_decode($pld), true);
+                    if ($decoded && $decoded['exp'] >= time()) $tokenData = $decoded;
+                }
+            }
+        }
+        if (!$tokenData) {
+            echo json_encode(["status" => "error", "message" => "Non connecté."]);
+            break;
+        }
+        $auth = $tokenData;
         if (!in_array($auth['role'], ['teacher', 'admin'])) {
             echo json_encode(["status" => "error", "message" => "Accès refusé."]);
             break;
         }
-        if (empty($data['course_id']) || empty($data['title']) || empty($data['content_type']) || empty($data['file_path'])) {
+
+        // Récupérer les champs selon le mode (FormData ou JSON)
+        $isFormData   = !empty($_POST);
+        $courseId     = $isFormData ? intval($_POST['course_id']   ?? 0) : intval($data['course_id']    ?? 0);
+        $title        = $isFormData ? trim($_POST['title']         ?? '') : trim($data['title']          ?? '');
+        $contentType  = $isFormData ? trim($_POST['content_type']  ?? '') : trim($data['content_type']   ?? '');
+        $filePath     = '';
+
+        if (!$courseId || !$title || !$contentType) {
             echo json_encode(["status" => "error", "message" => "Champs manquants."]);
             break;
         }
-        if (!in_array($data['content_type'], ['pdf', 'video'])) {
+        if (!in_array($contentType, ['pdf', 'video'])) {
             echo json_encode(["status" => "error", "message" => "content_type doit être 'pdf' ou 'video'."]);
             break;
         }
+
+        // Vérification ownership pour les enseignants
         if ($auth['role'] === 'teacher') {
             $checkOwner = $bdd->prepare('SELECT id FROM courses WHERE id = ? AND teacherId = ?');
-            $checkOwner->execute([$data['course_id'], $auth['uid']]);
+            $checkOwner->execute([$courseId, $auth['uid']]);
             if (!$checkOwner->fetch()) {
                 echo json_encode(["status" => "error", "message" => "Ce cours ne vous appartient pas."]);
                 break;
             }
         }
+
+        if ($contentType === 'pdf') {
+            // Upload du fichier PDF
+            if (empty($_FILES['pdf_file']) || $_FILES['pdf_file']['error'] !== UPLOAD_ERR_OK) {
+                echo json_encode(["status" => "error", "message" => "Fichier PDF manquant ou erreur d'upload."]);
+                break;
+            }
+            $uploadDir = __DIR__ . '/uploads/';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
+            $originalName = basename($_FILES['pdf_file']['name']);
+            $safeName     = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+            $destination  = $uploadDir . $safeName;
+
+            // Vérifier que c'est bien un PDF (MIME)
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime  = finfo_file($finfo, $_FILES['pdf_file']['tmp_name']);
+            finfo_close($finfo);
+            if ($mime !== 'application/pdf') {
+                echo json_encode(["status" => "error", "message" => "Le fichier doit être un PDF."]);
+                break;
+            }
+
+            if (!move_uploaded_file($_FILES['pdf_file']['tmp_name'], $destination)) {
+                echo json_encode(["status" => "error", "message" => "Échec de l'enregistrement du fichier."]);
+                break;
+            }
+            $filePath = 'uploads/' . $safeName;
+        } else {
+            // Vidéo : URL depuis JSON
+            $filePath = trim($data['file_path'] ?? '');
+            if (!$filePath) {
+                echo json_encode(["status" => "error", "message" => "URL de la vidéo manquante."]);
+                break;
+            }
+        }
+
         $req = $bdd->prepare('INSERT INTO lessons (course_id, title, content_type, file_path) VALUES (?, ?, ?, ?)');
-        $req->execute([$data['course_id'], $data['title'], $data['content_type'], $data['file_path']]);
+        $req->execute([$courseId, $title, $contentType, $filePath]);
         echo json_encode(["status" => "success", "message" => "Leçon ajoutée avec succès."]);
         break;
  
