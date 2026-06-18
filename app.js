@@ -1,4 +1,3 @@
-
 import { User, Cours, Inscription } from './models.js';
 import { z } from 'https://cdn.jsdelivr.net/npm/zod@3.23.8/+esm';
  
@@ -159,12 +158,39 @@ export async function chargerLeconsDuCours(courseId, conteneurHtml) {
             if (lecon.content_type === 'pdf') {
                 el.innerHTML = `
                     <h3>${lecon.title} <span class="badge badge-pdf">PDF</span></h3>
+                    <a href="${lecon.file_path}" target="_blank" class="btn-download">📄 Ouvrir le PDF</a>
                     <a href="${lecon.file_path}" download class="btn-download">📥 Télécharger le cours</a>
                     <button class="btn-evaluation">Passer l'évaluation</button>`;
             } else {
+                // Convertir les URLs YouTube en lien embed pour iframe
+                const videoUrl = lecon.file_path;
+                let embedHtml = '';
+                const ytMatch = videoUrl.match(
+                    /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+                );
+                const driveMatch = videoUrl.match(
+                    /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/
+                );
+ 
+                if (ytMatch) {
+                    // YouTube → iframe embed
+                    embedHtml = `<iframe width="320" height="180"
+                        src="https://www.youtube.com/embed/${ytMatch[1]}"
+                        frameborder="0" allowfullscreen style="display:block;margin:8px 0;border-radius:8px;"></iframe>`;
+                } else if (driveMatch) {
+                    // Google Drive → iframe preview
+                    embedHtml = `<iframe width="320" height="180"
+                        src="https://drive.google.com/file/d/${driveMatch[1]}/preview"
+                        frameborder="0" allowfullscreen style="display:block;margin:8px 0;border-radius:8px;"></iframe>`;
+                } else {
+                    // Lien direct (mp4, etc.) → balise video native
+                    embedHtml = `<video src="${videoUrl}" controls width="320" style="display:block;margin:8px 0;border-radius:8px;"></video>`;
+                }
+ 
                 el.innerHTML = `
                     <h3>${lecon.title} <span class="badge badge-video">Vidéo</span></h3>
-                    <video src="${lecon.file_path}" controls width="320"></video>
+                    ${embedHtml}
+                    <a href="${videoUrl}" target="_blank" class="btn-download">🔗 Ouvrir dans un nouvel onglet</a>
                     <br><button class="btn-evaluation">Passer l'évaluation</button>`;
             }
             el.querySelector('.btn-evaluation').addEventListener('click', () => passerEvaluation(lecon.id));
@@ -206,3 +232,4 @@ export async function chargerMesCours(conteneurHtml, onSelectCours) {
         console.error("Erreur chargement des cours:", error);
     }
 }
+ 
