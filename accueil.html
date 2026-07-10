@@ -11,14 +11,26 @@
         <h1>Mon Espace d'Apprentissage</h1>
         <div id="userInfo"></div>
         <nav id="headerNav">
-            <a href="admin.html" id="adminLink" class="hidden">⚙️ Administration</a>
+            <a href="promoteur.html" id="adminLink" class="hidden">⚙️ Espace Promoteur</a>
             <button id="logoutBtn">Déconnexion</button>
         </nav>
     </header>
  
     <main class="dashboard-content">
  
-        <!-- ======== SECTION PROFESSEUR / ADMIN ======== -->
+        <!-- ======== MODULES & PROGRESSION (visible pour tous) ======== -->
+        <section class="card">
+            <h2>🧩 Modules de formation</h2>
+            <div id="modulesContainer"><p>Chargement...</p></div>
+        </section>
+
+        <!-- ======== CERTIFICATS (étudiant) ======== -->
+        <section id="certificatesSection" class="card hidden">
+            <h2>🎓 Mes certificats</h2>
+            <div id="certificatsContainer"><p>Chargement...</p></div>
+        </section>
+
+        <!-- ======== SECTION PROFESSEUR / PROMOTEUR ======== -->
         <section id="teacherSection" class="hidden">
  
             <!-- Créer un cours -->
@@ -93,15 +105,21 @@
         </section>
  
         <!-- ======== SECTION ÉTUDIANT ======== -->
-        <section id="studentSection" class="card hidden">
-            <h2>📖 Leçons disponibles</h2>
-            <div id="lessonsContainer"><p>Chargement des leçons...</p></div>
+        <section id="studentSection" class="hidden">
+            <section class="card">
+                <h2>📚 Cours disponibles</h2>
+                <div id="coursesContainer"><p>Chargement des cours...</p></div>
+            </section>
+            <section class="card hidden" id="studentLessonsPanel">
+                <h2>📖 Leçons : <span id="studentCoursTitre"></span></h2>
+                <div id="lessonsContainer"></div>
+            </section>
         </section>
  
     </main>
  
     <script type="module">
-        import { CreeCours, chargerLeconsDuCours, chargerMesCours } from './app.js';
+        import { CreeCours, chargerLeconsDuCours, chargerMesCours, chargerModules, chargerProgressionModule, chargerMesCertificats } from './app.js';
  
         const userJson = localStorage.getItem('User');
         if (!userJson) {
@@ -115,13 +133,29 @@
                 `<span>Bienvenue, <strong>${user.firstName} ${user.lastName}</strong> 
                  <em class="role-badge">${user.role}</em></span>`;
  
-            // Lien admin visible seulement pour l'admin
-            if (user.role === 'admin') {
+            // Lien Espace Promoteur visible seulement pour le promoteur
+            if (user.role === 'promoteur') {
                 document.getElementById('adminLink').classList.remove('hidden');
+            }
+
+            // Modules visibles par tout le monde, avec la progression pour l'étudiant
+            chargerModules(document.getElementById('modulesContainer'), {
+                onRender: (module, div) => {
+                    if (user.role === 'student') {
+                        const progZone = div.querySelector(`#module-progress-${module.id}`);
+                        chargerProgressionModule(module.id, progZone);
+                    }
+                }
+            });
+
+            // Certificats : uniquement pour l'étudiant
+            if (user.role === 'student') {
+                document.getElementById('certificatesSection').classList.remove('hidden');
+                chargerMesCertificats(document.getElementById('certificatsContainer'));
             }
  
             // Affichage des sections selon le rôle
-            if (user.role === 'teacher' || user.role === 'admin') {
+            if (user.role === 'teacher' || user.role === 'promoteur') {
                 document.getElementById('teacherSection').classList.remove('hidden');
  
                 // Charger la liste des cours du prof
@@ -200,7 +234,7 @@
                                         document.getElementById('lessonCourseId').value = courseId;
                                         document.getElementById('pdfGroup').classList.remove('hidden');
                                         document.getElementById('videoGroup').classList.add('hidden');
-                                        chargerLeconsDuCours(courseId, document.getElementById('lessonsList'));
+                                        chargerLeconsDuCours(courseId, document.getElementById('lessonsList'), user.role);
                                     }
                                 } catch { alert("Réponse serveur invalide."); }
                             };
@@ -227,7 +261,7 @@
                                 document.getElementById('lessonCourseId').value = courseId;
                                 document.getElementById('pdfGroup').classList.remove('hidden');
                                 document.getElementById('videoGroup').classList.add('hidden');
-                                chargerLeconsDuCours(courseId, document.getElementById('lessonsList'));
+                                chargerLeconsDuCours(courseId, document.getElementById('lessonsList'), user.role);
                             }
                         }
                     } catch (err) {
@@ -239,9 +273,42 @@
                 });
  
             } else {
-                // Étudiant : voir les leçons du cours 1 par défaut
+                // Étudiant : afficher la liste de tous les cours disponibles
                 document.getElementById('studentSection').classList.remove('hidden');
-                chargerLeconsDuCours(1, document.getElementById('lessonsContainer'));
+                (async () => {
+                    const container = document.getElementById('coursesContainer');
+                    try {
+                        const res  = await fetch(`${API}?action=get_courses`, {
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }
+                        });
+                        const data = await res.json();
+                        container.innerHTML = '';
+                        if (data.status !== 'success' || data.courses.length === 0) {
+                            container.innerHTML = '<p class="empty-state">Aucun cours disponible pour le moment.</p>';
+                            return;
+                        }
+                        data.courses.forEach(cours => {
+                            const div = document.createElement('div');
+                            div.className = 'course-card';
+                            div.innerHTML = `
+                                <div class="course-info">
+                                    <h3>${cours.title}</h3>
+                                    <span class="course-code">${cours.code}</span>
+                                    <p>${cours.description || ''}</p>
+                                </div>
+                                <button class="btn-submit btn-small">Voir les leçons →</button>`;
+                            div.querySelector('button').addEventListener('click', () => {
+                                document.getElementById('studentLessonsPanel').classList.remove('hidden');
+                                document.getElementById('studentCoursTitre').textContent = `${cours.title} (${cours.code})`;
+                                chargerLeconsDuCours(cours.id, document.getElementById('lessonsContainer'), 'student');
+                                document.getElementById('studentLessonsPanel').scrollIntoView({ behavior: 'smooth' });
+                            });
+                            container.appendChild(div);
+                        });
+                    } catch (err) {
+                        container.innerHTML = '<p>Erreur de chargement des cours.</p>';
+                    }
+                })();
             }
  
             // Ouvrir le panneau de gestion des leçons pour un cours donné
@@ -250,7 +317,7 @@
                 section.classList.remove('hidden');
                 document.getElementById('coursTitreActif').textContent = `${cours.title} (${cours.code})`;
                 document.getElementById('lessonCourseId').value = cours.id;
-                chargerLeconsDuCours(cours.id, document.getElementById('lessonsList'));
+                chargerLeconsDuCours(cours.id, document.getElementById('lessonsList'), user.role);
                 section.scrollIntoView({ behavior: 'smooth' });
             }
  
