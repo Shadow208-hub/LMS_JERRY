@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vérification de certificat - LMS</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .verify-wrapper { max-width: 480px; margin: 60px auto; padding: 0 20px; }
+        .verify-card { text-align: center; }
+        .verify-icon { font-size: 48px; margin-bottom: 10px; }
+        .valid { color: #16A34A; }
+        .invalid { color: #DC2626; }
+        .cert-details { text-align: left; margin-top: 20px; padding-top: 16px; border-top: 1px solid #334155; }
+        .cert-details p { margin: 6px 0; }
+        .search-form { display: flex; gap: 8px; margin-top: 20px; }
+        .search-form input { flex: 1; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Vérification de certificat</h1>
+        <nav id="headerNav">
+            <a href="index.html" style="color:#94A3B8;">← Retour à l'accueil</a>
+        </nav>
+    </header>
+
+    <main class="verify-wrapper">
+        <section class="card verify-card" id="resultCard">
+            <p>Vérification en cours...</p>
+        </section>
+
+        <div class="search-form">
+            <input type="text" id="codeInput" placeholder="Coller un code de certificat...">
+            <button class="btn-submit btn-small" id="checkBtn">Vérifier</button>
+        </div>
+    </main>
+
+    <script>
+        const API = 'serveur.php';
+
+        async function verifier(code) {
+            const card = document.getElementById('resultCard');
+            card.innerHTML = '<p>Vérification en cours...</p>';
+            if (!code) {
+                card.innerHTML = '<p class="empty-state">Entrez un code de certificat ci-dessous.</p>';
+                return;
+            }
+            try {
+                const res  = await fetch(`${API}?action=verify_certificate&code=${encodeURIComponent(code)}`);
+                const data = await res.json();
+                if (!data.valid) {
+                    card.innerHTML = `
+                        <div class="verify-icon invalid">✖</div>
+                        <h2 class="invalid">Certificat invalide</h2>
+                        <p>${data.message || "Ce code ne correspond à aucun certificat délivré."}</p>`;
+                    return;
+                }
+                const c = data.certificate;
+                card.innerHTML = `
+                    <div class="verify-icon valid">✔</div>
+                    <h2 class="valid">Certificat authentique</h2>
+                    <div class="cert-details">
+                        <p><strong>Décerné à :</strong> ${c.firstName} ${c.lastName}</p>
+                        <p><strong>Module validé :</strong> ${c.module_title}</p>
+                        <p><strong>Score moyen :</strong> ${c.average_score}%</p>
+                        <p><strong>Date de délivrance :</strong> ${new Date(c.delivered_at).toLocaleDateString('fr-FR')}</p>
+                        <p><strong>Code :</strong> <code style="word-break:break-all;">${c.code}</code></p>
+                    </div>`;
+            } catch (err) {
+                card.innerHTML = '<p>Erreur lors de la vérification. Réessayez.</p>';
+            }
+        }
+
+        document.getElementById('checkBtn').addEventListener('click', () => {
+            verifier(document.getElementById('codeInput').value.trim());
+        });
+        document.getElementById('codeInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') verifier(document.getElementById('codeInput').value.trim());
+        });
+
+        // Auto-vérification si un code est passé dans l'URL (?code=...)
+        const params = new URLSearchParams(window.location.search);
+        const codeFromUrl = params.get('code');
+        if (codeFromUrl) {
+            document.getElementById('codeInput').value = codeFromUrl;
+            verifier(codeFromUrl);
+        } else {
+            document.getElementById('resultCard').innerHTML = '<p class="empty-state">Entrez un code de certificat ci-dessous.</p>';
+        }
+    </script>
+</body>
+</html>

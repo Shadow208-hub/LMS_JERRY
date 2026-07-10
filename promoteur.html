@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS - Espace Promoteur</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Espace Promoteur</h1>
+        <nav id="headerNav">
+            <a href="accueil.html" style="color:#94A3B8;">← Retour à l'accueil</a>
+            <button id="logoutBtn">Déconnexion</button>
+        </nav>
+    </header>
+
+    <main class="dashboard-content">
+
+        <!-- ======== MODULES ======== -->
+        <section class="card">
+            <h2>🧩 Créer un module</h2>
+            <p style="color:#64748B;margin-bottom:12px;">Un module regroupe plusieurs cours. Quand un étudiant valide toutes les évaluations des cours d'un module au-dessus du seuil fixé, un certificat lui est délivré automatiquement.</p>
+            <form id="moduleForm">
+                <div class="form-group">
+                    <label for="moduleTitle">Titre du module :</label>
+                    <input type="text" id="moduleTitle" required placeholder="ex: Développement Web">
+                </div>
+                <div class="form-group">
+                    <label for="moduleDescription">Description :</label>
+                    <textarea id="moduleDescription" placeholder="Décrivez ce module..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="moduleSeuil">Seuil de validation (%) :</label>
+                    <input type="number" id="moduleSeuil" min="1" max="100" value="60" required>
+                </div>
+                <button type="submit" class="btn-submit">Créer le module</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>📦 Modules existants</h2>
+            <div id="modulesList"><p>Chargement...</p></div>
+
+            <hr style="margin:20px 0;">
+            <h3>Ajouter un cours à un module</h3>
+            <form id="addCourseToModuleForm">
+                <div class="form-group">
+                    <label for="targetModule">Module :</label>
+                    <select id="targetModule" required><option value="">Chargement...</option></select>
+                </div>
+                <div class="form-group">
+                    <label for="targetCourse">Cours :</label>
+                    <select id="targetCourse" required><option value="">Chargement...</option></select>
+                </div>
+                <button type="submit" class="btn-submit">Ajouter au module</button>
+            </form>
+        </section>
+
+        <!-- ======== CERTIFICATS DÉLIVRÉS ======== -->
+        <section class="card">
+            <h2>🎓 Certificats délivrés</h2>
+            <div id="certificatesList"><p>Chargement...</p></div>
+        </section>
+
+        <!-- ======== GESTION DES PROMOTEURS ======== -->
+        <section class="card">
+            <h2>Promoteurs</h2>
+            <div id="adminsList"><p>Chargement...</p></div>
+            <form id="promoteForm" style="margin-top:15px;">
+                <div class="form-group">
+                    <label for="newAdminEmail">Promouvoir un utilisateur en promoteur (email) :</label>
+                    <input type="email" id="newAdminEmail" required placeholder="email@exemple.com">
+                </div>
+                <button type="submit" class="btn-submit">Promouvoir</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Enseignants en attente d'activation</h2>
+            <div id="pendingTeachers"><p>Chargement...</p></div>
+        </section>
+
+        <section class="card">
+            <h2>Tous les enseignants</h2>
+            <div id="allTeachers"><p>Chargement...</p></div>
+        </section>
+
+        <section class="card">
+            <h2>Ajouter une leçon à un cours</h2>
+            <form id="lessonForm">
+                <div class="form-group">
+                    <label for="course_id">Cours :</label>
+                    <select id="course_id" required>
+                        <option value="">Chargement des cours...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="lessonTitle">Titre de la leçon :</label>
+                    <input type="text" id="lessonTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="contentType">Type de contenu :</label>
+                    <select id="contentType" required>
+                        <option value="pdf">📄 PDF</option>
+                        <option value="video">🎬 Vidéo</option>
+                    </select>
+                </div>
+                <div class="form-group" id="pdfGroup">
+                    <label for="pdfFile">Fichier PDF :</label>
+                    <input type="file" id="pdfFile" accept=".pdf">
+                    <small style="color:#94A3B8;">Sélectionnez un fichier PDF depuis votre appareil.</small>
+                </div>
+                <div class="form-group hidden" id="videoGroup">
+                    <label for="videoUrl">URL de la vidéo :</label>
+                    <input type="url" id="videoUrl" placeholder="https://youtube.com/watch?v=...">
+                    <small style="color:#94A3B8;">Lien YouTube, Google Drive ou tout lien direct.</small>
+                </div>
+                <div id="uploadProgress" class="hidden" style="margin-top:8px;">
+                    <progress id="progressBar" value="0" max="100" style="width:100%;"></progress>
+                    <small id="progressLabel">Envoi en cours...</small>
+                </div>
+                <button type="submit" class="btn-submit" id="lessonSubmitBtn">Ajouter la leçon</button>
+            </form>
+        </section>
+
+    </main>
+
+    <script type="module">
+        import { creerModule, ajouterCoursAuModule, chargerModules } from './app.js';
+
+        const API = 'serveur.php';
+
+        function authH() {
+            return { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
+        }
+        function authHJson() {
+            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
+        }
+
+        async function verifierAcces() {
+            try {
+                const res  = await fetch(`${API}?action=is_promoteur`, { headers: authH() });
+                const data = await res.json();
+                if (!data.isPromoteur) {
+                    alert("Accès réservé au promoteur.");
+                    window.location.href = 'index.html';
+                    return false;
+                }
+                return true;
+            } catch (err) {
+                window.location.href = 'index.html';
+                return false;
+            }
+        }
+
+        // ---------------- Modules ----------------
+        async function rafraichirModules() {
+            await chargerModules(document.getElementById('modulesList'));
+            await remplirSelectsModule();
+        }
+
+        document.getElementById('moduleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const res = await creerModule({
+                title: document.getElementById('moduleTitle').value,
+                description: document.getElementById('moduleDescription').value,
+                seuil_validation: parseInt(document.getElementById('moduleSeuil').value, 10)
+            });
+            if (res && res.status === 'success') {
+                document.getElementById('moduleForm').reset();
+                document.getElementById('moduleSeuil').value = 60;
+                rafraichirModules();
+            }
+        });
+
+        async function remplirSelectsModule() {
+            try {
+                const [resM, resC] = await Promise.all([
+                    fetch(`${API}?action=get_modules`, { headers: authH() }),
+                    fetch(`${API}?action=get_courses`, { headers: authH() })
+                ]);
+                const dataM = await resM.json();
+                const dataC = await resC.json();
+
+                const selM = document.getElementById('targetModule');
+                selM.innerHTML = (dataM.status === 'success' && dataM.modules.length)
+                    ? dataM.modules.map(m => `<option value="${m.id}">${m.title}</option>`).join('')
+                    : '<option value="">Aucun module</option>';
+
+                const selC = document.getElementById('targetCourse');
+                selC.innerHTML = (dataC.status === 'success' && dataC.courses.length)
+                    ? dataC.courses.map(c => `<option value="${c.id}">${c.title} (${c.code})</option>`).join('')
+                    : '<option value="">Aucun cours</option>';
+            } catch (err) { console.error(err); }
+        }
+
+        document.getElementById('addCourseToModuleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const moduleId = document.getElementById('targetModule').value;
+            const courseId = document.getElementById('targetCourse').value;
+            if (!moduleId || !courseId) return;
+            const ok = await ajouterCoursAuModule(moduleId, courseId);
+            if (ok) rafraichirModules();
+        });
+
+        // ---------------- Certificats ----------------
+        async function chargerCertificatsDelivres() {
+            const container = document.getElementById('certificatesList');
+            try {
+                const res  = await fetch(`${API}?action=get_all_certificates`, { headers: authH() });
+                const data = await res.json();
+                if (data.status !== 'success' || data.certificates.length === 0) {
+                    container.innerHTML = '<p class="empty-state">Aucun certificat délivré pour le moment.</p>';
+                    return;
+                }
+                container.innerHTML = '<ul>' + data.certificates.map(c =>
+                    `<li><strong>${c.firstName} ${c.lastName}</strong> — ${c.module_title} (${c.average_score}%) — ${new Date(c.delivered_at).toLocaleDateString('fr-FR')}</li>`
+                ).join('') + '</ul>';
+            } catch (err) { container.innerHTML = '<p>Erreur de chargement.</p>'; }
+        }
+
+        // ---------------- Promoteurs / enseignants (existant, renommé) ----------------
+        async function chargerAdmins() {
+            const container = document.getElementById('adminsList');
+            try {
+                const res  = await fetch(`${API}?action=get_admins`, { headers: authH() });
+                const data = await res.json();
+                if (data.status !== 'success' || data.admins.length === 0) {
+                    container.innerHTML = '<p class="empty-state">Aucun promoteur.</p>';
+                    return;
+                }
+                container.innerHTML = '<ul>' + data.admins.map(a =>
+                    `<li>${a.firstName} ${a.lastName} (${a.email})</li>`
+                ).join('') + '</ul>';
+            } catch (err) {
+                container.innerHTML = '<p>Erreur de chargement.</p>';
+            }
+        }
+
+        document.getElementById('promoteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('newAdminEmail').value;
+            try {
+                const res  = await fetch(`${API}?action=promote_admin`, {
+                    method: 'POST', headers: authHJson(), body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+                alert(data.message);
+                if (data.status === 'success') { document.getElementById('promoteForm').reset(); chargerAdmins(); }
+            } catch (err) { alert("Erreur lors de la promotion."); }
+        });
+
+        async function chargerEnseignantsEnAttente() {
+            const container = document.getElementById('pendingTeachers');
+            try {
+                const res  = await fetch(`${API}?action=get_pending_teachers`, { headers: authH() });
+                const data = await res.json();
+                if (data.status !== 'success' || data.teachers.length === 0) {
+                    container.innerHTML = '<p class="empty-state">Aucun enseignant en attente.</p>';
+                    return;
+                }
+                container.innerHTML = '';
+                data.teachers.forEach(t => {
+                    const div = document.createElement('div');
+                    div.className = 'lecon-item';
+                    div.innerHTML = `<strong>${t.firstName} ${t.lastName}</strong> (${t.email})
+                        <button data-id="${t.id}" class="btn-approve">Approuver</button>`;
+                    div.querySelector('.btn-approve').addEventListener('click', () => approuverEnseignant(t.id, 1));
+                    container.appendChild(div);
+                });
+            } catch (err) { container.innerHTML = '<p>Erreur de chargement.</p>'; }
+        }
+
+        async function chargerTousEnseignants() {
+            const container = document.getElementById('allTeachers');
+            try {
+                const res  = await fetch(`${API}?action=get_teachers`, { headers: authH() });
+                const data = await res.json();
+                if (data.status !== 'success' || data.teachers.length === 0) {
+                    container.innerHTML = '<p class="empty-state">Aucun enseignant enregistré.</p>';
+                    return;
+                }
+                container.innerHTML = '';
+                data.teachers.forEach(t => {
+                    const div = document.createElement('div');
+                    div.className = 'lecon-item';
+                    const statut      = parseInt(t.isActive) === 1 ? 'Actif ✅' : 'Inactif ⏳';
+                    const actionLabel = parseInt(t.isActive) === 1 ? 'Désactiver' : 'Activer';
+                    const decision    = parseInt(t.isActive) === 1 ? 0 : 1;
+                    div.innerHTML = `<strong>${t.firstName} ${t.lastName}</strong> (${t.email}) — ${statut}
+                        <button class="btn-toggle">${actionLabel}</button>`;
+                    div.querySelector('.btn-toggle').addEventListener('click', () => approuverEnseignant(t.id, decision));
+                    container.appendChild(div);
+                });
+            } catch (err) { container.innerHTML = '<p>Erreur de chargement.</p>'; }
+        }
+
+        async function approuverEnseignant(teacherId, decision) {
+            try {
+                const res  = await fetch(`${API}?action=approver_enseignant`, {
+                    method: 'POST', headers: authHJson(), body: JSON.stringify({ teacher_id: teacherId, decision })
+                });
+                const data = await res.json();
+                alert(data.message);
+                chargerEnseignantsEnAttente();
+                chargerTousEnseignants();
+            } catch (err) { alert("Erreur lors de la mise à jour."); }
+        }
+
+        async function chargerCours() {
+            const select = document.getElementById('course_id');
+            try {
+                const res  = await fetch(`${API}?action=get_courses`, { headers: authH() });
+                const data = await res.json();
+                if (data.status !== 'success' || data.courses.length === 0) {
+                    select.innerHTML = '<option value="">Aucun cours disponible</option>';
+                    return;
+                }
+                select.innerHTML = '';
+                data.courses.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value       = c.id;
+                    opt.textContent = `${c.title} (${c.code})`;
+                    select.appendChild(opt);
+                });
+            } catch (err) { select.innerHTML = '<option value="">Erreur de chargement</option>'; }
+        }
+
+        document.getElementById('contentType').addEventListener('change', function () {
+            const isPdf = this.value === 'pdf';
+            document.getElementById('pdfGroup').classList.toggle('hidden', !isPdf);
+            document.getElementById('videoGroup').classList.toggle('hidden', isPdf);
+            document.getElementById('pdfFile').required = isPdf;
+            document.getElementById('videoUrl').required = !isPdf;
+        });
+        document.getElementById('pdfFile').required = true;
+
+        document.getElementById('lessonForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const courseId    = document.getElementById('course_id').value;
+            const contentType = document.getElementById('contentType').value;
+            const title       = document.getElementById('lessonTitle').value;
+            const btn         = document.getElementById('lessonSubmitBtn');
+            if (!courseId) { alert("Veuillez sélectionner un cours."); return; }
+
+            btn.disabled = true; btn.textContent = 'Envoi en cours...';
+
+            try {
+                if (contentType === 'pdf') {
+                    const pdfFile = document.getElementById('pdfFile').files[0];
+                    if (!pdfFile) { alert("Veuillez sélectionner un fichier PDF."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                    const formData = new FormData();
+                    formData.append('course_id',    courseId);
+                    formData.append('title',        title);
+                    formData.append('content_type', 'pdf');
+                    formData.append('token',        localStorage.getItem('token') || '');
+                    formData.append('pdf_file',     pdfFile);
+
+                    const progressZone = document.getElementById('uploadProgress');
+                    const progressBar  = document.getElementById('progressBar');
+                    const progressLbl  = document.getElementById('progressLabel');
+                    progressZone.classList.remove('hidden');
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', (ev) => {
+                        if (ev.lengthComputable) {
+                            const pct = Math.round((ev.loaded / ev.total) * 100);
+                            progressBar.value = pct; progressLbl.textContent = `Envoi : ${pct}%`;
+                        }
+                    });
+                    xhr.onload = () => {
+                        progressZone.classList.add('hidden');
+                        btn.disabled = false; btn.textContent = 'Ajouter la leçon';
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            alert(data.message);
+                            if (data.status === 'success') document.getElementById('lessonForm').reset();
+                        } catch { alert("Réponse serveur invalide."); }
+                    };
+                    xhr.onerror = () => { alert("Erreur réseau."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; };
+                    xhr.open('POST', `${API}?action=add_lesson`);
+                    xhr.send(formData);
+                } else {
+                    const videoUrl = document.getElementById('videoUrl').value;
+                    if (!videoUrl) { alert("Veuillez entrer l'URL de la vidéo."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                    const res  = await fetch(`${API}?action=add_lesson`, {
+                        method: 'POST', headers: authHJson(),
+                        body: JSON.stringify({ course_id: parseInt(courseId), title, content_type: 'video', file_path: videoUrl })
+                    });
+                    const data = await res.json();
+                    alert(data.message);
+                    if (data.status === 'success') document.getElementById('lessonForm').reset();
+                    btn.disabled = false; btn.textContent = 'Ajouter la leçon';
+                }
+            } catch (err) { alert("Erreur lors de l'ajout de la leçon."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('User');
+            localStorage.removeItem('token');
+            window.location.href = 'index.html';
+        });
+
+        (async () => {
+            const ok = await verifierAcces();
+            if (!ok) return;
+            chargerAdmins();
+            chargerEnseignantsEnAttente();
+            chargerTousEnseignants();
+            chargerCours();
+            rafraichirModules();
+            chargerCertificatsDelivres();
+        })();
+    </script>
+</body>
+</html>

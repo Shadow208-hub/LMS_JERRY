@@ -54,13 +54,61 @@ function verifierToken(): ?array {
     return $data; // ['uid' => ..., 'role' => ...]
 }
  
-function requireAdmin(): array {
+function requirePromoteur(): array {
     $token = verifierToken();
-    if (!$token || $token['role'] !== 'admin') {
-        echo json_encode(["status" => "error", "message" => "Accès refusé : réservé aux administrateurs."]);
+    if (!$token || $token['role'] !== 'promoteur') {
+        echo json_encode(["status" => "error", "message" => "Accès refusé : réservé au promoteur."]);
         exit;
     }
     return $token;
+}
+
+// Génère un code de certificat unique, infalsifiable (SHA-256)
+function genererCodeCertificat(int $studentId, int $moduleId): string {
+    return hash('sha256', $studentId . '|' . $moduleId . '|' . bin2hex(random_bytes(16)) . '|' . time());
+}
+
+// Calcule la moyenne de progression d'un étudiant sur un module, et délivre
+// automatiquement le certificat si le seuil est atteint et qu'il n'existe pas déjà.
+function verifierEtDelivrerCertificat(PDO $bdd, int $studentId, int $moduleId): ?array {
+    $reqCourses = $bdd->prepare('SELECT course_id FROM module_courses WHERE module_id = ?');
+    $reqCourses->execute([$moduleId]);
+    $courseIds = array_column($reqCourses->fetchAll(), 'course_id');
+    if (empty($courseIds)) return null;
+
+    $placeholders = implode(',', array_fill(0, count($courseIds), '?'));
+
+    $reqLessons = $bdd->prepare("SELECT id FROM lessons WHERE course_id IN ($placeholders)");
+    $reqLessons->execute($courseIds);
+    $lessonIds = array_column($reqLessons->fetchAll(), 'id');
+    if (empty($lessonIds)) return null;
+
+    $placeholdersL = implode(',', array_fill(0, count($lessonIds), '?'));
+
+    $reqDone = $bdd->prepare("SELECT lesson_id, progress_percent FROM progress WHERE student_id = ? AND lesson_id IN ($placeholdersL)");
+    $reqDone->execute(array_merge([$studentId], $lessonIds));
+    $done = $reqDone->fetchAll();
+
+    if (count($done) < count($lessonIds)) return null; // pas encore terminé toutes les leçons
+
+    $moyenne = array_sum(array_column($done, 'progress_percent')) / count($done);
+
+    $reqSeuil = $bdd->prepare('SELECT seuil_validation FROM modules WHERE id = ?');
+    $reqSeuil->execute([$moduleId]);
+    $seuil = (int)($reqSeuil->fetchColumn() ?: 60);
+
+    if ($moyenne < $seuil) return null;
+
+    $reqExist = $bdd->prepare('SELECT code FROM certificates WHERE student_id = ? AND module_id = ?');
+    $reqExist->execute([$studentId, $moduleId]);
+    $existing = $reqExist->fetchColumn();
+    if ($existing) return ['code' => $existing, 'average' => round($moyenne, 1), 'already' => true];
+
+    $code = genererCodeCertificat($studentId, $moduleId);
+    $reqInsert = $bdd->prepare('INSERT INTO certificates (student_id, module_id, code, average_score) VALUES (?, ?, ?, ?)');
+    $reqInsert->execute([$studentId, $moduleId, $code, round($moyenne, 2)]);
+
+    return ['code' => $code, 'average' => round($moyenne, 1), 'already' => false];
 }
  
 function requireAuth(): array {
@@ -75,11 +123,14 @@ function requireAuth(): array {
 // ----------------------------------------------------------------
 // Base de données
 // ----------------------------------------------------------------
-$host     = getenv('DB_HOST');
-$db_name  = getenv('DB_NAME');
-$username = getenv('DB_USER');
-$password = getenv('DB_PASSWORD');
-$port     = getenv('DB_PORT') ?: 3306;
+$host     = getenv('DB_HOST')     ?: 'localhost';
+$db_name  = getenv('DB_NAME')     ?: 'lms_local';
+$username = getenv('DB_USER')     ?: 'root';
+$password = getenv('DB_PASSWORD') ?: '';
+$port     = getenv('DB_PORT')     ?: 3306;
+// ↑ Valeurs par défaut pour XAMPP en local (MySQL root sans mot de passe).
+//   En production (Render/Clever Cloud), les vraies variables d'environnement
+//   DB_HOST / DB_NAME / DB_USER / DB_PASSWORD prennent le dessus automatiquement.
  
 if (!$host || !$db_name || !$username) {
     echo json_encode(["status" => "error", "message" => "Variables de connexion manquantes."]);
@@ -104,16 +155,20 @@ try {
 switch ($action) {
  
     // ------------------------------------------------------------------
-    case 'is_admin':
+    case 'is_promoteur':
         $token = verifierToken();
         echo json_encode([
-            "status"  => "success",
-            "isAdmin" => $token && $token['role'] === 'admin'
+            "status"      => "success",
+            "isPromoteur" => $token && $token['role'] === 'promoteur'
         ]);
         break;
  
     // ------------------------------------------------------------------
     case 'register':
+        if (!in_array($data['role'] ?? '', ['student', 'teacher'], true)) {
+            echo json_encode(["status" => "error", "message" => "Rôle invalide."]);
+            break;
+        }
         $check = $bdd->prepare('SELECT id FROM users WHERE email = ?');
         $check->execute([$data['email']]);
         if ($check->fetch()) {
@@ -152,7 +207,7 @@ switch ($action) {
     // ------------------------------------------------------------------
     case 'create_course':
         $auth = requireAuth();
-        if (!in_array($auth['role'], ['teacher', 'admin'])) {
+        if (!in_array($auth['role'], ['teacher', 'promoteur'])) {
             echo json_encode(["status" => "error", "message" => "Accès refusé."]);
             break;
         }
@@ -193,7 +248,7 @@ switch ($action) {
             break;
         }
         $auth = $tokenData;
-        if (!in_array($auth['role'], ['teacher', 'admin'])) {
+        if (!in_array($auth['role'], ['teacher', 'promoteur'])) {
             echo json_encode(["status" => "error", "message" => "Accès refusé."]);
             break;
         }
@@ -275,7 +330,7 @@ switch ($action) {
     // ------------------------------------------------------------------
     case 'get_teacher_courses':
         $auth = requireAuth();
-        $tid  = ($auth['role'] === 'admin' && isset($_GET['teacher_id']))
+        $tid  = ($auth['role'] === 'promoteur' && isset($_GET['teacher_id']))
             ? intval($_GET['teacher_id'])
             : $auth['uid'];
         $req = $bdd->prepare("SELECT id, title, code, description, maxStudents FROM courses WHERE teacherId = ? ORDER BY id DESC");
@@ -290,7 +345,7 @@ switch ($action) {
             // L'étudiant voit tous les cours disponibles
             $req = $bdd->prepare("SELECT id, title, code, description FROM courses ORDER BY id DESC");
             $req->execute();
-        } elseif ($auth['role'] === 'admin') {
+        } elseif ($auth['role'] === 'promoteur') {
             $req = $bdd->prepare("SELECT id, title, code, teacherId FROM courses ORDER BY id DESC");
             $req->execute();
         } else {
@@ -303,7 +358,7 @@ switch ($action) {
  
     // ------------------------------------------------------------------
     case 'approver_enseignant':
-        requireAdmin();
+        requirePromoteur();
         if (!isset($data['teacher_id']) || !isset($data['decision'])) {
             echo json_encode(["status" => "error", "message" => "Paramètres manquants."]);
             break;
@@ -315,46 +370,266 @@ switch ($action) {
         break;
  
     case 'get_pending_teachers':
-        requireAdmin();
+        requirePromoteur();
         $req = $bdd->prepare("SELECT id, firstName, lastName, email FROM users WHERE role = 'teacher' AND isActive = 0");
         $req->execute();
         echo json_encode(["status" => "success", "teachers" => $req->fetchAll()]);
         break;
  
     case 'get_teachers':
-        requireAdmin();
+        requirePromoteur();
         $req = $bdd->prepare("SELECT id, firstName, lastName, email, isActive FROM users WHERE role = 'teacher'");
         $req->execute();
         echo json_encode(["status" => "success", "teachers" => $req->fetchAll()]);
         break;
- 
+
     case 'promote_admin':
-        requireAdmin();
+        requirePromoteur();
         if (empty($data['email'])) { echo json_encode(["status" => "error", "message" => "Email manquant."]); break; }
-        $req = $bdd->prepare("UPDATE users SET role = 'admin', isActive = 1 WHERE email = ?");
+        $req = $bdd->prepare("UPDATE users SET role = 'promoteur', isActive = 1 WHERE email = ?");
         $req->execute([$data['email']]);
         echo json_encode($req->rowCount()
-            ? ["status" => "success", "message" => "Utilisateur promu administrateur."]
+            ? ["status" => "success", "message" => "Utilisateur promu promoteur."]
             : ["status" => "error",   "message" => "Aucun utilisateur trouvé."]);
         break;
- 
+
     case 'get_admins':
-        requireAdmin();
-        $req = $bdd->prepare("SELECT id, firstName, lastName, email FROM users WHERE role = 'admin'");
+        requirePromoteur();
+        $req = $bdd->prepare("SELECT id, firstName, lastName, email FROM users WHERE role = 'promoteur'");
         $req->execute();
         echo json_encode(["status" => "success", "admins" => $req->fetchAll()]);
         break;
- 
+
+    // ------------------------------------------------------------------
+    // QCM : le professeur ajoute des questions à une leçon
+    // ------------------------------------------------------------------
+    case 'add_question':
+        $auth = requireAuth();
+        if (!in_array($auth['role'], ['teacher', 'promoteur'])) {
+            echo json_encode(["status" => "error", "message" => "Accès refusé."]);
+            break;
+        }
+        foreach (['lesson_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option'] as $champ) {
+            if (empty($data[$champ]) && $data[$champ] !== '0') {
+                echo json_encode(["status" => "error", "message" => "Champ manquant : $champ"]);
+                break 2;
+            }
+        }
+        if (!in_array($data['correct_option'], ['a', 'b', 'c', 'd'])) {
+            echo json_encode(["status" => "error", "message" => "Réponse correcte invalide."]);
+            break;
+        }
+        $req = $bdd->prepare('INSERT INTO questions (lesson_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $req->execute([
+            $data['lesson_id'], $data['question_text'],
+            $data['option_a'], $data['option_b'], $data['option_c'], $data['option_d'],
+            $data['correct_option']
+        ]);
+        echo json_encode(["status" => "success", "message" => "Question ajoutée à l'évaluation."]);
+        break;
+
+    // Étudiant : récupère les questions d'une leçon (sans la bonne réponse)
+    case 'get_quiz':
+        requireAuth();
+        $req = $bdd->prepare('SELECT id, question_text, option_a, option_b, option_c, option_d FROM questions WHERE lesson_id = ?');
+        $req->execute([$_GET['lesson_id']]);
+        echo json_encode(["status" => "success", "questions" => $req->fetchAll()]);
+        break;
+
+    // Professeur : récupère les questions d'une leçon AVEC la bonne réponse (édition)
+    case 'get_quiz_full':
+        $auth = requireAuth();
+        if (!in_array($auth['role'], ['teacher', 'promoteur'])) {
+            echo json_encode(["status" => "error", "message" => "Accès refusé."]);
+            break;
+        }
+        $req = $bdd->prepare('SELECT * FROM questions WHERE lesson_id = ?');
+        $req->execute([$_GET['lesson_id']]);
+        echo json_encode(["status" => "success", "questions" => $req->fetchAll()]);
+        break;
+
+    // ------------------------------------------------------------------
+    // Étudiant soumet ses réponses au QCM d'une leçon → correction automatique
     // ------------------------------------------------------------------
     case 'submit_evaluation':
         $auth = requireAuth();
-        $score = intval($data['score_obtained']);
-        $maxScore = intval($data['max_score'] ?? 20);
-        $req = $bdd->prepare('INSERT INTO progress (student_id, lesson_id, score_obtained, progress_percent) VALUES (?, ?, ?, ?)');
-        $req->execute([$data['student_id'], $data['lesson_id'], $score, ($score / $maxScore) * 100]);
-        echo json_encode(["status" => "success", "progress_percent" => round(($score / $maxScore) * 100, 1)]);
+        if ($auth['role'] !== 'student') {
+            echo json_encode(["status" => "error", "message" => "Seuls les étudiants peuvent passer une évaluation."]);
+            break;
+        }
+        $lessonId = intval($data['lesson_id'] ?? 0);
+        $reponses = $data['answers'] ?? []; // { question_id: 'a' }
+        if (!$lessonId || empty($reponses)) {
+            echo json_encode(["status" => "error", "message" => "Réponses manquantes."]);
+            break;
+        }
+        $req = $bdd->prepare('SELECT id, correct_option FROM questions WHERE lesson_id = ?');
+        $req->execute([$lessonId]);
+        $questions = $req->fetchAll();
+        if (empty($questions)) {
+            echo json_encode(["status" => "error", "message" => "Aucune évaluation configurée pour cette leçon."]);
+            break;
+        }
+        $bonnesReponses = 0;
+        foreach ($questions as $q) {
+            if (isset($reponses[$q['id']]) && $reponses[$q['id']] === $q['correct_option']) {
+                $bonnesReponses++;
+            }
+        }
+        $total   = count($questions);
+        $percent = round(($bonnesReponses / $total) * 100, 1);
+
+        $req = $bdd->prepare('INSERT INTO progress (student_id, lesson_id, score_obtained, max_score, progress_percent)
+                               VALUES (?, ?, ?, ?, ?)
+                               ON DUPLICATE KEY UPDATE score_obtained = VALUES(score_obtained), max_score = VALUES(max_score), progress_percent = VALUES(progress_percent), submitted_at = NOW()');
+        $req->execute([$auth['uid'], $lessonId, $bonnesReponses, $total, $percent]);
+
+        // Vérifie si cette évaluation permet de valider un module → délivrance auto du certificat
+        $certificatsObtenus = [];
+        $reqModules = $bdd->prepare('SELECT DISTINCT mc.module_id FROM module_courses mc
+                                      JOIN lessons l ON l.course_id = mc.course_id
+                                      WHERE l.id = ?');
+        $reqModules->execute([$lessonId]);
+        foreach ($reqModules->fetchAll() as $m) {
+            $resultatCert = verifierEtDelivrerCertificat($bdd, (int)$auth['uid'], (int)$m['module_id']);
+            if ($resultatCert && !$resultatCert['already']) {
+                $certificatsObtenus[] = $resultatCert;
+            }
+        }
+
+        echo json_encode([
+            "status"            => "success",
+            "bonnes_reponses"   => $bonnesReponses,
+            "total_questions"   => $total,
+            "progress_percent"  => $percent,
+            "nouveaux_certificats" => $certificatsObtenus
+        ]);
         break;
- 
+
+    // ------------------------------------------------------------------
+    // MODULES (promoteur)
+    // ------------------------------------------------------------------
+    case 'create_module':
+        requirePromoteur();
+        if (empty($data['title'])) {
+            echo json_encode(["status" => "error", "message" => "Titre du module requis."]);
+            break;
+        }
+        $auth = verifierToken();
+        $req = $bdd->prepare('INSERT INTO modules (title, description, promoteur_id, seuil_validation) VALUES (?, ?, ?, ?)');
+        $req->execute([$data['title'], $data['description'] ?? '', $auth['uid'], intval($data['seuil_validation'] ?? 60)]);
+        echo json_encode(["status" => "success", "message" => "Module créé avec succès.", "module_id" => $bdd->lastInsertId()]);
+        break;
+
+    case 'add_course_to_module':
+        requirePromoteur();
+        if (empty($data['module_id']) || empty($data['course_id'])) {
+            echo json_encode(["status" => "error", "message" => "Module et cours requis."]);
+            break;
+        }
+        $req = $bdd->prepare('INSERT IGNORE INTO module_courses (module_id, course_id) VALUES (?, ?)');
+        $req->execute([$data['module_id'], $data['course_id']]);
+        echo json_encode(["status" => "success", "message" => "Cours ajouté au module."]);
+        break;
+
+    case 'remove_course_from_module':
+        requirePromoteur();
+        $req = $bdd->prepare('DELETE FROM module_courses WHERE module_id = ? AND course_id = ?');
+        $req->execute([$data['module_id'], $data['course_id']]);
+        echo json_encode(["status" => "success", "message" => "Cours retiré du module."]);
+        break;
+
+    case 'get_modules':
+        requireAuth();
+        $req = $bdd->prepare('SELECT m.*, u.firstName, u.lastName FROM modules m JOIN users u ON u.id = m.promoteur_id ORDER BY m.id DESC');
+        $req->execute();
+        $modules = $req->fetchAll();
+        foreach ($modules as &$mod) {
+            $reqC = $bdd->prepare('SELECT c.id, c.title, c.code FROM module_courses mc JOIN courses c ON c.id = mc.course_id WHERE mc.module_id = ?');
+            $reqC->execute([$mod['id']]);
+            $mod['courses'] = $reqC->fetchAll();
+        }
+        echo json_encode(["status" => "success", "modules" => $modules]);
+        break;
+
+    // Progression d'un étudiant sur un module précis
+    case 'get_module_progress':
+        $auth = requireAuth();
+        $studentId = ($auth['role'] === 'promoteur' && isset($_GET['student_id'])) ? intval($_GET['student_id']) : $auth['uid'];
+        $moduleId  = intval($_GET['module_id']);
+
+        $reqC = $bdd->prepare('SELECT course_id FROM module_courses WHERE module_id = ?');
+        $reqC->execute([$moduleId]);
+        $courseIds = array_column($reqC->fetchAll(), 'course_id');
+        if (empty($courseIds)) { echo json_encode(["status" => "success", "total_lecons" => 0, "lecons_faites" => 0, "moyenne" => 0]); break; }
+        $ph = implode(',', array_fill(0, count($courseIds), '?'));
+
+        $reqL = $bdd->prepare("SELECT id FROM lessons WHERE course_id IN ($ph)");
+        $reqL->execute($courseIds);
+        $lessonIds = array_column($reqL->fetchAll(), 'id');
+        $totalLecons = count($lessonIds);
+
+        $moyenne = 0; $leconsFaites = 0;
+        if ($totalLecons > 0) {
+            $phL = implode(',', array_fill(0, count($lessonIds), '?'));
+            $reqP = $bdd->prepare("SELECT progress_percent FROM progress WHERE student_id = ? AND lesson_id IN ($phL)");
+            $reqP->execute(array_merge([$studentId], $lessonIds));
+            $scores = array_column($reqP->fetchAll(), 'progress_percent');
+            $leconsFaites = count($scores);
+            $moyenne = $leconsFaites ? array_sum($scores) / $leconsFaites : 0;
+        }
+        echo json_encode([
+            "status" => "success",
+            "total_lecons" => $totalLecons,
+            "lecons_faites" => $leconsFaites,
+            "moyenne" => round($moyenne, 1)
+        ]);
+        break;
+
+    // ------------------------------------------------------------------
+    // CERTIFICATS
+    // ------------------------------------------------------------------
+    case 'get_my_certificates':
+        $auth = requireAuth();
+        $req = $bdd->prepare('SELECT c.*, m.title AS module_title, u.firstName, u.lastName
+                               FROM certificates c
+                               JOIN modules m ON m.id = c.module_id
+                               JOIN users u ON u.id = c.student_id
+                               WHERE c.student_id = ? ORDER BY c.delivered_at DESC');
+        $req->execute([$auth['uid']]);
+        echo json_encode(["status" => "success", "certificates" => $req->fetchAll()]);
+        break;
+
+    case 'get_all_certificates':
+        requirePromoteur();
+        $req = $bdd->prepare('SELECT c.*, m.title AS module_title, u.firstName, u.lastName, u.email
+                               FROM certificates c
+                               JOIN modules m ON m.id = c.module_id
+                               JOIN users u ON u.id = c.student_id
+                               ORDER BY c.delivered_at DESC');
+        $req->execute();
+        echo json_encode(["status" => "success", "certificates" => $req->fetchAll()]);
+        break;
+
+    // Vérification PUBLIQUE d'un certificat (aucune authentification requise, comme un vrai vérificateur)
+    case 'verify_certificate':
+        $code = trim($_GET['code'] ?? '');
+        if (!$code) { echo json_encode(["status" => "error", "message" => "Code manquant."]); break; }
+        $req = $bdd->prepare('SELECT c.code, c.average_score, c.delivered_at, m.title AS module_title,
+                                      u.firstName, u.lastName
+                               FROM certificates c
+                               JOIN modules m ON m.id = c.module_id
+                               JOIN users u ON u.id = c.student_id
+                               WHERE c.code = ?');
+        $req->execute([$code]);
+        $cert = $req->fetch();
+        if (!$cert) {
+            echo json_encode(["status" => "error", "valid" => false, "message" => "Certificat introuvable ou invalide."]);
+            break;
+        }
+        echo json_encode(["status" => "success", "valid" => true, "certificate" => $cert]);
+        break;
+
     default:
         echo json_encode(["status" => "error", "message" => "Action non reconnue."]);
         break;
