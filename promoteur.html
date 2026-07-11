@@ -112,9 +112,21 @@
                     <small style="color:#94A3B8;">Sélectionnez un fichier PDF depuis votre appareil.</small>
                 </div>
                 <div class="form-group hidden" id="videoGroup">
+                    <label>Source de la vidéo :</label>
+                    <select id="videoSource">
+                        <option value="url">🔗 Lien URL</option>
+                        <option value="file">📤 Uploader un fichier vidéo</option>
+                    </select>
+                </div>
+                <div class="form-group hidden" id="videoUrlGroup">
                     <label for="videoUrl">URL de la vidéo :</label>
                     <input type="url" id="videoUrl" placeholder="https://youtube.com/watch?v=...">
                     <small style="color:#94A3B8;">Lien YouTube, Google Drive ou tout lien direct.</small>
+                </div>
+                <div class="form-group hidden" id="videoFileGroup">
+                    <label for="videoFile">Fichier vidéo :</label>
+                    <input type="file" id="videoFile" accept="video/*">
+                    <small style="color:#94A3B8;">Formats acceptés : mp4, webm, mov...</small>
                 </div>
                 <div id="uploadProgress" class="hidden" style="margin-top:8px;">
                     <progress id="progressBar" value="0" max="100" style="width:100%;"></progress>
@@ -327,13 +339,27 @@
             } catch (err) { select.innerHTML = '<option value="">Erreur de chargement</option>'; }
         }
 
-        document.getElementById('contentType').addEventListener('change', function () {
-            const isPdf = this.value === 'pdf';
+        function majAffichageChampsLecon() {
+            const isPdf = document.getElementById('contentType').value === 'pdf';
             document.getElementById('pdfGroup').classList.toggle('hidden', !isPdf);
             document.getElementById('videoGroup').classList.toggle('hidden', isPdf);
             document.getElementById('pdfFile').required = isPdf;
-            document.getElementById('videoUrl').required = !isPdf;
-        });
+
+            if (!isPdf) {
+                const isFile = document.getElementById('videoSource').value === 'file';
+                document.getElementById('videoUrlGroup').classList.toggle('hidden', isFile);
+                document.getElementById('videoFileGroup').classList.toggle('hidden', !isFile);
+                document.getElementById('videoUrl').required = !isFile;
+                document.getElementById('videoFile').required = isFile;
+            } else {
+                document.getElementById('videoUrlGroup').classList.add('hidden');
+                document.getElementById('videoFileGroup').classList.add('hidden');
+                document.getElementById('videoUrl').required = false;
+                document.getElementById('videoFile').required = false;
+            }
+        }
+        document.getElementById('contentType').addEventListener('change', majAffichageChampsLecon);
+        document.getElementById('videoSource').addEventListener('change', majAffichageChampsLecon);
         document.getElementById('pdfFile').required = true;
 
         document.getElementById('lessonForm').addEventListener('submit', async (e) => {
@@ -341,21 +367,32 @@
             const courseId    = document.getElementById('course_id').value;
             const contentType = document.getElementById('contentType').value;
             const title       = document.getElementById('lessonTitle').value;
+            const videoSource = document.getElementById('videoSource').value;
             const btn         = document.getElementById('lessonSubmitBtn');
             if (!courseId) { alert("Veuillez sélectionner un cours."); return; }
 
             btn.disabled = true; btn.textContent = 'Envoi en cours...';
 
+            const uploadAvecFichier = (contentType === 'pdf') || (contentType === 'video' && videoSource === 'file');
+
             try {
-                if (contentType === 'pdf') {
-                    const pdfFile = document.getElementById('pdfFile').files[0];
-                    if (!pdfFile) { alert("Veuillez sélectionner un fichier PDF."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                if (uploadAvecFichier) {
                     const formData = new FormData();
                     formData.append('course_id',    courseId);
                     formData.append('title',        title);
-                    formData.append('content_type', 'pdf');
+                    formData.append('content_type', contentType);
                     formData.append('token',        localStorage.getItem('token') || '');
-                    formData.append('pdf_file',     pdfFile);
+
+                    if (contentType === 'pdf') {
+                        const pdfFile = document.getElementById('pdfFile').files[0];
+                        if (!pdfFile) { alert("Veuillez sélectionner un fichier PDF."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                        formData.append('pdf_file', pdfFile);
+                    } else {
+                        const videoFile = document.getElementById('videoFile').files[0];
+                        if (!videoFile) { alert("Veuillez sélectionner un fichier vidéo."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                        formData.append('video_source', 'file');
+                        formData.append('video_file', videoFile);
+                    }
 
                     const progressZone = document.getElementById('uploadProgress');
                     const progressBar  = document.getElementById('progressBar');
@@ -375,7 +412,7 @@
                         try {
                             const data = JSON.parse(xhr.responseText);
                             alert(data.message);
-                            if (data.status === 'success') document.getElementById('lessonForm').reset();
+                            if (data.status === 'success') { document.getElementById('lessonForm').reset(); majAffichageChampsLecon(); }
                         } catch { alert("Réponse serveur invalide."); }
                     };
                     xhr.onerror = () => { alert("Erreur réseau."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; };
@@ -386,11 +423,11 @@
                     if (!videoUrl) { alert("Veuillez entrer l'URL de la vidéo."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
                     const res  = await fetch(`${API}?action=add_lesson`, {
                         method: 'POST', headers: authHJson(),
-                        body: JSON.stringify({ course_id: parseInt(courseId), title, content_type: 'video', file_path: videoUrl })
+                        body: JSON.stringify({ course_id: parseInt(courseId), title, content_type: 'video', video_source: 'url', file_path: videoUrl })
                     });
                     const data = await res.json();
                     alert(data.message);
-                    if (data.status === 'success') document.getElementById('lessonForm').reset();
+                    if (data.status === 'success') { document.getElementById('lessonForm').reset(); majAffichageChampsLecon(); }
                     btn.disabled = false; btn.textContent = 'Ajouter la leçon';
                 }
             } catch (err) { alert("Erreur lors de l'ajout de la leçon."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; }

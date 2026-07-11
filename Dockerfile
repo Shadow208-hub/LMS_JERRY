@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Active le module de réécriture d'URL (utile pour le routing PHP)
 RUN a2enmod rewrite
 
+# Augmente les limites d'upload PHP (utile pour les vidéos) — voir uploads.ini
+COPY uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+
 # Copie tous les fichiers de ton projet dans le dossier du serveur web
 COPY . /var/www/html/
 

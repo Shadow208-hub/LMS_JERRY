@@ -253,15 +253,18 @@ export async function chargerModules(conteneurHtml, options = {}) {
         }
         data.modules.forEach(m => {
             const div = document.createElement('div');
-            div.className = 'course-card';
+            div.className = 'course-card module-card';
             div.innerHTML = `
                 <div class="course-info">
-                    <h3>${m.title}</h3>
+                    <h3>🧩 ${m.title}</h3>
                     <p>${m.description || ''}</p>
                     <small>Seuil de validation : ${m.seuil_validation}% — ${m.courses.length} cours associé(s)</small>
-                    <ul>${m.courses.map(c => `<li>${c.title} (${c.code})</li>`).join('')}</ul>
                     <div class="module-progress" id="module-progress-${m.id}"></div>
-                </div>`;
+                </div>
+                ${options.onSelect ? '<button class="btn-submit btn-small">Voir les cours →</button>' : ''}`;
+            if (options.onSelect) {
+                div.querySelector('button').addEventListener('click', () => options.onSelect(m));
+            }
             conteneurHtml.appendChild(div);
             if (options.onRender) options.onRender(m, div);
         });
@@ -269,6 +272,29 @@ export async function chargerModules(conteneurHtml, options = {}) {
         console.error("Erreur chargement des modules:", error);
     }
 }
+
+// Affiche les cours d'un module donné (appelé après clic sur un module),
+// chaque cours étant cliquable pour ouvrir ses leçons.
+export function afficherCoursDuModule(module, conteneurHtml, role, onCourseSelect) {
+    conteneurHtml.innerHTML = '';
+    if (!module.courses || module.courses.length === 0) {
+        conteneurHtml.innerHTML = '<p class="empty-state">Aucun cours associé à ce module pour le moment.</p>';
+        return;
+    }
+    module.courses.forEach(cours => {
+        const div = document.createElement('div');
+        div.className = 'course-card';
+        div.innerHTML = `
+            <div class="course-info">
+                <h3>${cours.title}</h3>
+                <span class="course-code">${cours.code}</span>
+            </div>
+            <button class="btn-submit btn-small">Voir les leçons →</button>`;
+        div.querySelector('button').addEventListener('click', () => onCourseSelect(cours));
+        conteneurHtml.appendChild(div);
+    });
+}
+
 
 export async function chargerProgressionModule(moduleId, conteneurHtml) {
     try {

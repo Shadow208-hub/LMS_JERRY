@@ -89,11 +89,23 @@
                         <input type="file" id="pdfFile" accept=".pdf">
                         <small style="color:#94A3B8;">Sélectionnez un fichier PDF depuis votre appareil.</small>
                     </div>
-                    <!-- Champ Vidéo : URL uniquement -->
+                    <!-- Champ Vidéo : URL ou fichier uploadé, au choix -->
                     <div class="form-group hidden" id="videoGroup">
+                        <label>Source de la vidéo :</label>
+                        <select id="videoSource">
+                            <option value="url">🔗 Lien URL</option>
+                            <option value="file">📤 Uploader un fichier vidéo</option>
+                        </select>
+                    </div>
+                    <div class="form-group hidden" id="videoUrlGroup">
                         <label for="videoUrl">URL de la vidéo :</label>
                         <input type="url" id="videoUrl" placeholder="https://youtube.com/watch?v=...">
                         <small style="color:#94A3B8;">Lien YouTube, Google Drive ou tout lien direct.</small>
+                    </div>
+                    <div class="form-group hidden" id="videoFileGroup">
+                        <label for="videoFile">Fichier vidéo :</label>
+                        <input type="file" id="videoFile" accept="video/*">
+                        <small style="color:#94A3B8;">Formats acceptés : mp4, webm, mov...</small>
                     </div>
                     <div id="uploadProgress" class="hidden" style="margin-top:8px;">
                         <progress id="progressBar" value="0" max="100" style="width:100%;"></progress>
@@ -106,11 +118,13 @@
  
         <!-- ======== SECTION ÉTUDIANT ======== -->
         <section id="studentSection" class="hidden">
-            <section class="card">
-                <h2>📚 Cours disponibles</h2>
-                <div id="coursesContainer"><p>Chargement des cours...</p></div>
+            <section class="card hidden" id="moduleCoursesPanel">
+                <button id="backToModulesBtn" class="btn-download" style="margin-bottom:12px;">← Retour aux modules</button>
+                <h2>📚 Cours du module : <span id="moduleCoursesTitre"></span></h2>
+                <div id="moduleCoursesContainer"></div>
             </section>
             <section class="card hidden" id="studentLessonsPanel">
+                <button id="backToCoursesBtn" class="btn-download" style="margin-bottom:12px;">← Retour aux cours</button>
                 <h2>📖 Leçons : <span id="studentCoursTitre"></span></h2>
                 <div id="lessonsContainer"></div>
             </section>
@@ -119,7 +133,7 @@
     </main>
  
     <script type="module">
-        import { CreeCours, chargerLeconsDuCours, chargerMesCours, chargerModules, chargerProgressionModule, chargerMesCertificats } from './app.js';
+        import { CreeCours, chargerLeconsDuCours, chargerMesCours, chargerModules, chargerProgressionModule, chargerMesCertificats, afficherCoursDuModule } from './app.js';
  
         const userJson = localStorage.getItem('User');
         if (!userJson) {
@@ -138,14 +152,36 @@
                 document.getElementById('adminLink').classList.remove('hidden');
             }
 
-            // Modules visibles par tout le monde, avec la progression pour l'étudiant
+            // Modules visibles par tout le monde, avec la progression + navigation pour l'étudiant
             chargerModules(document.getElementById('modulesContainer'), {
                 onRender: (module, div) => {
                     if (user.role === 'student') {
                         const progZone = div.querySelector(`#module-progress-${module.id}`);
                         chargerProgressionModule(module.id, progZone);
                     }
-                }
+                },
+                onSelect: user.role === 'student' ? (module) => {
+                    document.getElementById('moduleCoursesPanel').classList.remove('hidden');
+                    document.getElementById('studentLessonsPanel').classList.add('hidden');
+                    document.getElementById('moduleCoursesTitre').textContent = module.title;
+                    afficherCoursDuModule(module, document.getElementById('moduleCoursesContainer'), 'student', (cours) => {
+                        document.getElementById('studentLessonsPanel').classList.remove('hidden');
+                        document.getElementById('studentCoursTitre').textContent = `${cours.title} (${cours.code})`;
+                        chargerLeconsDuCours(cours.id, document.getElementById('lessonsContainer'), 'student');
+                        document.getElementById('studentLessonsPanel').scrollIntoView({ behavior: 'smooth' });
+                    });
+                    document.getElementById('moduleCoursesPanel').scrollIntoView({ behavior: 'smooth' });
+                } : undefined
+            });
+
+            document.getElementById('backToModulesBtn')?.addEventListener('click', () => {
+                document.getElementById('moduleCoursesPanel').classList.add('hidden');
+                document.getElementById('studentLessonsPanel').classList.add('hidden');
+                document.getElementById('modulesContainer').scrollIntoView({ behavior: 'smooth' });
+            });
+            document.getElementById('backToCoursesBtn')?.addEventListener('click', () => {
+                document.getElementById('studentLessonsPanel').classList.add('hidden');
+                document.getElementById('moduleCoursesPanel').scrollIntoView({ behavior: 'smooth' });
             });
 
             // Certificats : uniquement pour l'étudiant
@@ -177,14 +213,28 @@
                     chargerMesCours(conteneurCours, (cours) => ouvrirGestionLecons(cours));
                 });
  
-                // Basculer entre PDF upload et URL vidéo
-                document.getElementById('contentType').addEventListener('change', function () {
-                    const isPdf = this.value === 'pdf';
+                // Basculer entre PDF upload, URL vidéo et fichier vidéo
+                function majAffichageChamps() {
+                    const isPdf = document.getElementById('contentType').value === 'pdf';
                     document.getElementById('pdfGroup').classList.toggle('hidden', !isPdf);
                     document.getElementById('videoGroup').classList.toggle('hidden', isPdf);
                     document.getElementById('pdfFile').required = isPdf;
-                    document.getElementById('videoUrl').required = !isPdf;
-                });
+
+                    if (!isPdf) {
+                        const isFile = document.getElementById('videoSource').value === 'file';
+                        document.getElementById('videoUrlGroup').classList.toggle('hidden', isFile);
+                        document.getElementById('videoFileGroup').classList.toggle('hidden', !isFile);
+                        document.getElementById('videoUrl').required = !isFile;
+                        document.getElementById('videoFile').required = isFile;
+                    } else {
+                        document.getElementById('videoUrlGroup').classList.add('hidden');
+                        document.getElementById('videoFileGroup').classList.add('hidden');
+                        document.getElementById('videoUrl').required = false;
+                        document.getElementById('videoFile').required = false;
+                    }
+                }
+                document.getElementById('contentType').addEventListener('change', majAffichageChamps);
+                document.getElementById('videoSource').addEventListener('change', majAffichageChamps);
                 // Init : PDF sélectionné par défaut
                 document.getElementById('pdfFile').required = true;
 
@@ -194,12 +244,15 @@
                     const courseId    = document.getElementById('lessonCourseId').value;
                     const contentType = document.getElementById('contentType').value;
                     const title       = document.getElementById('lessonTitle').value;
+                    const videoSource = document.getElementById('videoSource').value;
                     const btn         = document.getElementById('lessonSubmitBtn');
 
                     btn.disabled = true;
                     btn.textContent = 'Envoi en cours...';
 
-                    try {
+                    const uploadAvecFichier = (contentType === 'pdf') || (contentType === 'video' && videoSource === 'file');
+
+                    if (uploadAvecFichier) {
                         const formData = new FormData();
                         formData.append('course_id',    courseId);
                         formData.append('title',        title);
@@ -210,105 +263,76 @@
                             const pdfFile = document.getElementById('pdfFile').files[0];
                             if (!pdfFile) { alert("Veuillez sélectionner un fichier PDF."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
                             formData.append('pdf_file', pdfFile);
-                            // Upload avec progression
-                            const xhr = new XMLHttpRequest();
-                            const progressZone = document.getElementById('uploadProgress');
-                            const progressBar  = document.getElementById('progressBar');
-                            const progressLbl  = document.getElementById('progressLabel');
-                            progressZone.classList.remove('hidden');
-                            xhr.upload.addEventListener('progress', (ev) => {
-                                if (ev.lengthComputable) {
-                                    const pct = Math.round((ev.loaded / ev.total) * 100);
-                                    progressBar.value    = pct;
-                                    progressLbl.textContent = `Envoi : ${pct}%`;
-                                }
-                            });
-                            xhr.onload = () => {
-                                progressZone.classList.add('hidden');
-                                btn.disabled = false; btn.textContent = 'Ajouter la leçon';
-                                try {
-                                    const data = JSON.parse(xhr.responseText);
-                                    alert(data.message);
-                                    if (data.status === 'success') {
-                                        document.getElementById('lessonForm').reset();
-                                        document.getElementById('lessonCourseId').value = courseId;
-                                        document.getElementById('pdfGroup').classList.remove('hidden');
-                                        document.getElementById('videoGroup').classList.add('hidden');
-                                        chargerLeconsDuCours(courseId, document.getElementById('lessonsList'), user.role);
-                                    }
-                                } catch { alert("Réponse serveur invalide."); }
-                            };
-                            xhr.onerror = () => { alert("Erreur réseau."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; };
-                            xhr.open('POST', `${API}?action=add_lesson`);
-                            xhr.send(formData);
-                            return; // XHR gère la suite
                         } else {
-                            // Vidéo : URL simple en JSON
-                            const videoUrl = document.getElementById('videoUrl').value;
-                            if (!videoUrl) { alert("Veuillez entrer l'URL de la vidéo."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                            const videoFile = document.getElementById('videoFile').files[0];
+                            if (!videoFile) { alert("Veuillez sélectionner un fichier vidéo."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                            formData.append('video_source', 'file');
+                            formData.append('video_file', videoFile);
+                        }
+
+                        // Upload avec progression
+                        const xhr = new XMLHttpRequest();
+                        const progressZone = document.getElementById('uploadProgress');
+                        const progressBar  = document.getElementById('progressBar');
+                        const progressLbl  = document.getElementById('progressLabel');
+                        progressZone.classList.remove('hidden');
+                        xhr.upload.addEventListener('progress', (ev) => {
+                            if (ev.lengthComputable) {
+                                const pct = Math.round((ev.loaded / ev.total) * 100);
+                                progressBar.value    = pct;
+                                progressLbl.textContent = `Envoi : ${pct}%`;
+                            }
+                        });
+                        xhr.onload = () => {
+                            progressZone.classList.add('hidden');
+                            btn.disabled = false; btn.textContent = 'Ajouter la leçon';
+                            try {
+                                const data = JSON.parse(xhr.responseText);
+                                alert(data.message);
+                                if (data.status === 'success') {
+                                    document.getElementById('lessonForm').reset();
+                                    document.getElementById('lessonCourseId').value = courseId;
+                                    majAffichageChamps();
+                                    chargerLeconsDuCours(courseId, document.getElementById('lessonsList'), user.role);
+                                }
+                            } catch { alert("Réponse serveur invalide."); }
+                        };
+                        xhr.onerror = () => { alert("Erreur réseau."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; };
+                        xhr.open('POST', `${API}?action=add_lesson`);
+                        xhr.send(formData);
+                    } else {
+                        // Vidéo : URL simple en JSON
+                        const videoUrl = document.getElementById('videoUrl').value;
+                        if (!videoUrl) { alert("Veuillez entrer l'URL de la vidéo."); btn.disabled = false; btn.textContent = 'Ajouter la leçon'; return; }
+                        try {
                             const res = await fetch(`${API}?action=add_lesson`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
                                 },
-                                body: JSON.stringify({ course_id: parseInt(courseId), title, content_type: 'video', file_path: videoUrl })
+                                body: JSON.stringify({ course_id: parseInt(courseId), title, content_type: 'video', video_source: 'url', file_path: videoUrl })
                             });
                             const data = await res.json();
                             alert(data.message);
                             if (data.status === 'success') {
                                 document.getElementById('lessonForm').reset();
                                 document.getElementById('lessonCourseId').value = courseId;
-                                document.getElementById('pdfGroup').classList.remove('hidden');
-                                document.getElementById('videoGroup').classList.add('hidden');
+                                majAffichageChamps();
                                 chargerLeconsDuCours(courseId, document.getElementById('lessonsList'), user.role);
                             }
+                        } catch (err) {
+                            alert("Erreur lors de l'ajout de la leçon.");
+                            console.error(err);
+                        } finally {
+                            btn.disabled = false; btn.textContent = 'Ajouter la leçon';
                         }
-                    } catch (err) {
-                        alert("Erreur lors de l'ajout de la leçon.");
-                        console.error(err);
-                    } finally {
-                        btn.disabled = false; btn.textContent = 'Ajouter la leçon';
                     }
                 });
  
             } else {
-                // Étudiant : afficher la liste de tous les cours disponibles
+                // Étudiant : la navigation se fait désormais via les modules (voir onSelect ci-dessus)
                 document.getElementById('studentSection').classList.remove('hidden');
-                (async () => {
-                    const container = document.getElementById('coursesContainer');
-                    try {
-                        const res  = await fetch(`${API}?action=get_courses`, {
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }
-                        });
-                        const data = await res.json();
-                        container.innerHTML = '';
-                        if (data.status !== 'success' || data.courses.length === 0) {
-                            container.innerHTML = '<p class="empty-state">Aucun cours disponible pour le moment.</p>';
-                            return;
-                        }
-                        data.courses.forEach(cours => {
-                            const div = document.createElement('div');
-                            div.className = 'course-card';
-                            div.innerHTML = `
-                                <div class="course-info">
-                                    <h3>${cours.title}</h3>
-                                    <span class="course-code">${cours.code}</span>
-                                    <p>${cours.description || ''}</p>
-                                </div>
-                                <button class="btn-submit btn-small">Voir les leçons →</button>`;
-                            div.querySelector('button').addEventListener('click', () => {
-                                document.getElementById('studentLessonsPanel').classList.remove('hidden');
-                                document.getElementById('studentCoursTitre').textContent = `${cours.title} (${cours.code})`;
-                                chargerLeconsDuCours(cours.id, document.getElementById('lessonsContainer'), 'student');
-                                document.getElementById('studentLessonsPanel').scrollIntoView({ behavior: 'smooth' });
-                            });
-                            container.appendChild(div);
-                        });
-                    } catch (err) {
-                        container.innerHTML = '<p>Erreur de chargement des cours.</p>';
-                    }
-                })();
             }
  
             // Ouvrir le panneau de gestion des leçons pour un cours donné

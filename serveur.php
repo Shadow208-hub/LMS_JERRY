@@ -307,11 +307,40 @@ switch ($action) {
             }
             $filePath = 'uploads/' . $safeName;
         } else {
-            // Vidéo : URL depuis JSON
-            $filePath = trim($data['file_path'] ?? '');
-            if (!$filePath) {
-                echo json_encode(["status" => "error", "message" => "URL de la vidéo manquante."]);
-                break;
+            // Vidéo : soit un fichier uploadé, soit un lien URL (au choix du prof)
+            $videoSource = $isFormData ? trim($_POST['video_source'] ?? 'url') : trim($data['video_source'] ?? 'url');
+
+            if ($videoSource === 'file') {
+                if (empty($_FILES['video_file']) || $_FILES['video_file']['error'] !== UPLOAD_ERR_OK) {
+                    echo json_encode(["status" => "error", "message" => "Fichier vidéo manquant ou erreur d'upload."]);
+                    break;
+                }
+                $uploadDir = __DIR__ . '/uploads/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
+                $originalName = basename($_FILES['video_file']['name']);
+                $safeName     = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $destination  = $uploadDir . $safeName;
+
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mime  = finfo_file($finfo, $_FILES['video_file']['tmp_name']);
+                finfo_close($finfo);
+                if (strpos($mime, 'video/') !== 0) {
+                    echo json_encode(["status" => "error", "message" => "Le fichier doit être une vidéo (mp4, webm, mov...)."]);
+                    break;
+                }
+
+                if (!move_uploaded_file($_FILES['video_file']['tmp_name'], $destination)) {
+                    echo json_encode(["status" => "error", "message" => "Échec de l'enregistrement du fichier."]);
+                    break;
+                }
+                $filePath = 'uploads/' . $safeName;
+            } else {
+                $filePath = $isFormData ? trim($_POST['file_path'] ?? '') : trim($data['file_path'] ?? '');
+                if (!$filePath) {
+                    echo json_encode(["status" => "error", "message" => "URL de la vidéo manquante."]);
+                    break;
+                }
             }
         }
 
