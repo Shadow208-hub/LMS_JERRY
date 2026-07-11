@@ -17,6 +17,30 @@
 
     <main class="dashboard-content">
 
+        <!-- ======== CRÉER UN COURS ======== -->
+        <section class="card">
+            <h2>➕ Créer un nouveau cours</h2>
+            <form id="courseForm">
+                <div class="form-group">
+                    <label for="titre">Titre du cours :</label>
+                    <input type="text" id="titre" required placeholder="ex: Introduction aux algorithmes">
+                </div>
+                <div class="form-group">
+                    <label for="code">Code du cours :</label>
+                    <input type="text" id="code" required placeholder="ex: INF201">
+                </div>
+                <div class="form-group">
+                    <label for="description">Description :</label>
+                    <textarea id="description" required placeholder="Décrivez brièvement le cours..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="maxetudiant">Nombre max d'étudiants :</label>
+                    <input type="number" id="maxetudiant" required min="1" placeholder="ex: 50">
+                </div>
+                <button type="submit" class="btn-submit">Créer le cours</button>
+            </form>
+        </section>
+
         <!-- ======== MODULES ======== -->
         <section class="card">
             <h2>🧩 Créer un module</h2>
@@ -139,9 +163,10 @@
     </main>
 
     <script type="module">
-        import { creerModule, ajouterCoursAuModule, chargerModules } from './app.js';
+        import { creerModule, ajouterCoursAuModule, chargerModules, CreeCours } from './app.js';
 
         const API = 'serveur.php';
+        const currentUser = JSON.parse(localStorage.getItem('User') || '{}');
 
         function authH() {
             return { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
@@ -165,6 +190,19 @@
                 return false;
             }
         }
+
+        // ---------------- Créer un cours ----------------
+        document.getElementById('courseForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const donneesCours = {
+                titre: document.getElementById('titre').value,
+                code: document.getElementById('code').value,
+                description: document.getElementById('description').value,
+                teacherid: parseInt(currentUser.id),
+                maxetudiant: parseInt(document.getElementById('maxetudiant').value)
+            };
+            await CreeCours(donneesCours);
+        });
 
         // ---------------- Modules ----------------
         async function rafraichirModules() {
