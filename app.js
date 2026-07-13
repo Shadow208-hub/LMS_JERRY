@@ -2,10 +2,10 @@ import { User, Cours, Inscription } from './models.js';
 import { z } from 'https://cdn.jsdelivr.net/npm/zod@3.23.8/+esm';
  
 // ----------------------------------------------------------------
-// Token : lu depuis localStorage, injecté dans chaque requête
+// Token : lu depuis sessionStorage, injecté dans chaque requête
 // ----------------------------------------------------------------
 function getToken() {
-    return localStorage.getItem('token') || '';
+    return sessionStorage.getItem('token') || '';
 }
  
 // Headers communs avec Authorization
@@ -77,8 +77,8 @@ export async function connection(email, password) {
         const result = await response.json();
         if (result.status === 'success') {
             alert(`Ravi de vous revoir ${result.user.firstName} !`);
-            localStorage.setItem('token', result.token);
-            localStorage.setItem('User', JSON.stringify(result.user));
+            sessionStorage.setItem('token', result.token);
+            sessionStorage.setItem('User', JSON.stringify(result.user));
             window.location.href = 'accueil.html';
         } else {
             alert(result.message);
@@ -480,4 +480,3 @@ export async function chargerMesCours(conteneurHtml, onSelectCours) {
         console.error("Erreur chargement des cours:", error);
     }
 }
- 
