@@ -166,13 +166,13 @@
         import { creerModule, ajouterCoursAuModule, chargerModules, CreeCours } from './app.js';
 
         const API = 'serveur.php';
-        const currentUser = JSON.parse(localStorage.getItem('User') || '{}');
+        const currentUser = JSON.parse(sessionStorage.getItem('User') || '{}');
 
         function authH() {
-            return { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
+            return { 'Authorization': 'Bearer ' + (sessionStorage.getItem('token') || '') };
         }
         function authHJson() {
-            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
+            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (sessionStorage.getItem('token') || '') };
         }
 
         async function verifierAcces() {
@@ -419,7 +419,7 @@
                     formData.append('course_id',    courseId);
                     formData.append('title',        title);
                     formData.append('content_type', contentType);
-                    formData.append('token',        localStorage.getItem('token') || '');
+                    formData.append('token',        sessionStorage.getItem('token') || '');
 
                     if (contentType === 'pdf') {
                         const pdfFile = document.getElementById('pdfFile').files[0];
@@ -472,8 +472,8 @@
         });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.removeItem('User');
-            localStorage.removeItem('token');
+            sessionStorage.removeItem('User');
+            sessionStorage.removeItem('token');
             window.location.href = 'index.html';
         });
 
