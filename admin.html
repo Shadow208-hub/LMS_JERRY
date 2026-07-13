@@ -86,10 +86,10 @@
  
         // Token stocké au login
         function authH() {
-            return { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
+            return { 'Authorization': 'Bearer ' + (sessionStorage.getItem('token') || '') };
         }
         function authHJson() {
-            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
+            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (sessionStorage.getItem('token') || '') };
         }
  
         // Vérification d'accès
@@ -243,7 +243,7 @@
                     formData.append('course_id',    courseId);
                     formData.append('title',        title);
                     formData.append('content_type', 'pdf');
-                    formData.append('token',        localStorage.getItem('token') || '');
+                    formData.append('token',        sessionStorage.getItem('token') || '');
                     formData.append('pdf_file',     pdfFile);
 
                     const progressZone = document.getElementById('uploadProgress');
@@ -286,8 +286,8 @@
         });
  
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.removeItem('User');
-            localStorage.removeItem('token');
+            sessionStorage.removeItem('User');
+            sessionStorage.removeItem('token');
             window.location.href = 'index.html';
         });
  
