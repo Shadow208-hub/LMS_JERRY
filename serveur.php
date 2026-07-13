@@ -536,6 +536,167 @@ switch ($action) {
         break;
 
     // ------------------------------------------------------------------
+    // DEVOIRS (professeur crée, étudiant soumet un fichier)
+    // ------------------------------------------------------------------
+    case 'create_assignment':
+        $auth = requireAuth();
+        if (!in_array($auth['role'], ['teacher', 'promoteur'])) {
+            echo json_encode(["status" => "error", "message" => "Accès refusé."]);
+            break;
+        }
+        if (empty($data['course_id']) || empty($data['title'])) {
+            echo json_encode(["status" => "error", "message" => "Cours et titre requis."]);
+            break;
+        }
+        if ($auth['role'] === 'teacher') {
+            $checkOwner = $bdd->prepare('SELECT id FROM courses WHERE id = ? AND teacherId = ?');
+            $checkOwner->execute([$data['course_id'], $auth['uid']]);
+            if (!$checkOwner->fetch()) {
+                echo json_encode(["status" => "error", "message" => "Ce cours ne vous appartient pas."]);
+                break;
+            }
+        }
+        $dueDate = !empty($data['due_date']) ? $data['due_date'] : null;
+        $req = $bdd->prepare('INSERT INTO assignments (course_id, teacher_id, title, description, due_date, max_score, is_published) VALUES (?, ?, ?, ?, ?, ?, 1)');
+        $req->execute([
+            $data['course_id'], $auth['uid'], $data['title'],
+            $data['description'] ?? '', $dueDate, intval($data['max_score'] ?? 20)
+        ]);
+        echo json_encode(["status" => "success", "message" => "Devoir créé avec succès.", "assignment_id" => $bdd->lastInsertId()]);
+        break;
+
+    case 'get_assignments':
+        $auth     = requireAuth();
+        $courseId = intval($_GET['course_id'] ?? 0);
+        if (!$courseId) { echo json_encode(["status" => "error", "message" => "course_id manquant."]); break; }
+
+        if ($auth['role'] === 'student') {
+            $req = $bdd->prepare('SELECT id, course_id, title, description, due_date, max_score
+                                   FROM assignments WHERE course_id = ? AND is_published = 1
+                                   ORDER BY (due_date IS NULL), due_date ASC');
+            $req->execute([$courseId]);
+            $assignments = $req->fetchAll();
+            foreach ($assignments as &$a) {
+                $reqS = $bdd->prepare('SELECT file_path, submitted_at, is_late, status FROM submissions WHERE assignment_id = ? AND student_id = ?');
+                $reqS->execute([$a['id'], $auth['uid']]);
+                $a['ma_soumission'] = $reqS->fetch() ?: null;
+            }
+        } else {
+            if ($auth['role'] === 'teacher') {
+                $checkOwner = $bdd->prepare('SELECT id FROM courses WHERE id = ? AND teacherId = ?');
+                $checkOwner->execute([$courseId, $auth['uid']]);
+                if (!$checkOwner->fetch()) {
+                    echo json_encode(["status" => "error", "message" => "Ce cours ne vous appartient pas."]);
+                    break;
+                }
+            }
+            $req = $bdd->prepare('SELECT a.*, (SELECT COUNT(*) FROM submissions s WHERE s.assignment_id = a.id) AS nb_soumissions
+                                   FROM assignments a WHERE a.course_id = ? ORDER BY a.id DESC');
+            $req->execute([$courseId]);
+            $assignments = $req->fetchAll();
+        }
+        echo json_encode(["status" => "success", "assignments" => $assignments]);
+        break;
+
+    case 'submit_assignment':
+        // Même logique que add_lesson : token en header OU dans $_POST['token'] (upload multipart)
+        $tokenData = verifierToken();
+        if (!$tokenData && !empty($_POST['token'])) {
+            $tkRaw = $_POST['token'];
+            $parts = explode('.', $tkRaw);
+            if (count($parts) === 3) {
+                [$hdr, $pld, $sg] = $parts;
+                $expSig = base64url_encode(hash_hmac('sha256', "$hdr.$pld", TOKEN_SECRET, true));
+                if (hash_equals($expSig, $sg)) {
+                    $decoded = json_decode(base64url_decode($pld), true);
+                    if ($decoded && $decoded['exp'] >= time()) $tokenData = $decoded;
+                }
+            }
+        }
+        if (!$tokenData) { echo json_encode(["status" => "error", "message" => "Non connecté."]); break; }
+        $auth = $tokenData;
+        if ($auth['role'] !== 'student') {
+            echo json_encode(["status" => "error", "message" => "Seuls les étudiants peuvent soumettre un devoir."]);
+            break;
+        }
+        $assignmentId = intval($_POST['assignment_id'] ?? 0);
+        if (!$assignmentId) { echo json_encode(["status" => "error", "message" => "Devoir non spécifié."]); break; }
+
+        $reqA = $bdd->prepare('SELECT * FROM assignments WHERE id = ? AND is_published = 1');
+        $reqA->execute([$assignmentId]);
+        $assignment = $reqA->fetch();
+        if (!$assignment) { echo json_encode(["status" => "error", "message" => "Devoir introuvable ou non publié."]); break; }
+
+        if (empty($_FILES['submission_file']) || $_FILES['submission_file']['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(["status" => "error", "message" => "Fichier de soumission manquant ou erreur d'upload."]);
+            break;
+        }
+
+        $extensionsAutorisees = ['pdf', 'doc', 'docx', 'zip', 'txt'];
+        $mimesAutorisees = [
+            'application/pdf', 'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/zip', 'text/plain'
+        ];
+        $originalName = basename($_FILES['submission_file']['name']);
+        $ext   = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime  = finfo_file($finfo, $_FILES['submission_file']['tmp_name']);
+        finfo_close($finfo);
+        if (!in_array($ext, $extensionsAutorisees, true) || !in_array($mime, $mimesAutorisees, true)) {
+            echo json_encode(["status" => "error", "message" => "Format non autorisé (pdf, doc, docx, zip, txt uniquement)."]);
+            break;
+        }
+
+        $uploadDir = __DIR__ . '/uploads/devoirs/';
+        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+        $safeName    = time() . '_' . $auth['uid'] . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+        $destination = $uploadDir . $safeName;
+        if (!move_uploaded_file($_FILES['submission_file']['tmp_name'], $destination)) {
+            echo json_encode(["status" => "error", "message" => "Échec de l'enregistrement du fichier."]);
+            break;
+        }
+        $filePath = 'uploads/devoirs/' . $safeName;
+
+        $isLate = ($assignment['due_date'] && strtotime($assignment['due_date']) < time()) ? 1 : 0;
+        $status = $isLate ? 'en_retard' : 'soumis';
+
+        // Une soumission remplace la précédente si l'étudiant renvoie un nouveau fichier
+        $req = $bdd->prepare('INSERT INTO submissions (assignment_id, student_id, file_path, is_late, status)
+                               VALUES (?, ?, ?, ?, ?)
+                               ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), is_late = VALUES(is_late), status = VALUES(status), submitted_at = NOW()');
+        $req->execute([$assignmentId, $auth['uid'], $filePath, $isLate, $status]);
+
+        echo json_encode([
+            "status"  => "success",
+            "message" => $isLate ? "Devoir soumis (en retard)." : "Devoir soumis avec succès.",
+            "is_late" => (bool)$isLate
+        ]);
+        break;
+
+    case 'get_assignment_submissions':
+        $auth = requireAuth();
+        if (!in_array($auth['role'], ['teacher', 'promoteur'])) {
+            echo json_encode(["status" => "error", "message" => "Accès refusé."]);
+            break;
+        }
+        $assignmentId = intval($_GET['assignment_id'] ?? 0);
+        $reqA = $bdd->prepare('SELECT a.*, c.teacherId FROM assignments a JOIN courses c ON c.id = a.course_id WHERE a.id = ?');
+        $reqA->execute([$assignmentId]);
+        $assignment = $reqA->fetch();
+        if (!$assignment) { echo json_encode(["status" => "error", "message" => "Devoir introuvable."]); break; }
+        if ($auth['role'] === 'teacher' && (int)$assignment['teacherId'] !== (int)$auth['uid']) {
+            echo json_encode(["status" => "error", "message" => "Ce devoir ne vous appartient pas."]);
+            break;
+        }
+        $req = $bdd->prepare('SELECT s.*, u.firstName, u.lastName, u.email
+                               FROM submissions s JOIN users u ON u.id = s.student_id
+                               WHERE s.assignment_id = ? ORDER BY s.submitted_at DESC');
+        $req->execute([$assignmentId]);
+        echo json_encode(["status" => "success", "submissions" => $req->fetchAll()]);
+        break;
+
+    // ------------------------------------------------------------------
     // MODULES (promoteur)
     // ------------------------------------------------------------------
     case 'create_module':
@@ -551,10 +712,22 @@ switch ($action) {
         break;
 
     case 'add_course_to_module':
-        requirePromoteur();
+        $auth = requireAuth();
+        if (!in_array($auth['role'], ['teacher', 'promoteur'])) {
+            echo json_encode(["status" => "error", "message" => "Accès refusé."]);
+            break;
+        }
         if (empty($data['module_id']) || empty($data['course_id'])) {
             echo json_encode(["status" => "error", "message" => "Module et cours requis."]);
             break;
+        }
+        if ($auth['role'] === 'teacher') {
+            $checkOwner = $bdd->prepare('SELECT id FROM courses WHERE id = ? AND teacherId = ?');
+            $checkOwner->execute([$data['course_id'], $auth['uid']]);
+            if (!$checkOwner->fetch()) {
+                echo json_encode(["status" => "error", "message" => "Ce cours ne vous appartient pas."]);
+                break;
+            }
         }
         $req = $bdd->prepare('INSERT IGNORE INTO module_courses (module_id, course_id) VALUES (?, ?)');
         $req->execute([$data['module_id'], $data['course_id']]);
@@ -562,7 +735,19 @@ switch ($action) {
         break;
 
     case 'remove_course_from_module':
-        requirePromoteur();
+        $auth = requireAuth();
+        if (!in_array($auth['role'], ['teacher', 'promoteur'])) {
+            echo json_encode(["status" => "error", "message" => "Accès refusé."]);
+            break;
+        }
+        if ($auth['role'] === 'teacher') {
+            $checkOwner = $bdd->prepare('SELECT id FROM courses WHERE id = ? AND teacherId = ?');
+            $checkOwner->execute([$data['course_id'], $auth['uid']]);
+            if (!$checkOwner->fetch()) {
+                echo json_encode(["status" => "error", "message" => "Ce cours ne vous appartient pas."]);
+                break;
+            }
+        }
         $req = $bdd->prepare('DELETE FROM module_courses WHERE module_id = ? AND course_id = ?');
         $req->execute([$data['module_id'], $data['course_id']]);
         echo json_encode(["status" => "success", "message" => "Cours retiré du module."]);
